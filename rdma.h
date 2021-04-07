@@ -1,3 +1,8 @@
+/*
+ * Copyright 2021 Netherlands eScience Center and ASTRON.
+ * Licensed under the Apache License, version 2.0. See LICENSE for details.
+ */
+
 #ifndef RDMA_H
 #define RDMA_H
 
