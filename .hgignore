@@ -1,0 +1,5 @@
+syntax: rootglob
+*.o
+ud_pingpong
+ud_server
+ud_client
