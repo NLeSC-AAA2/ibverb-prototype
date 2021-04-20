@@ -31,7 +31,6 @@
  */
 
 #include <arpa/inet.h>
-#include <malloc.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>

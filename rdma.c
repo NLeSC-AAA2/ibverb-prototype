@@ -4,7 +4,6 @@
  */
 
 #include <arpa/inet.h>
-#include <malloc.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -21,14 +20,13 @@ static struct ibv_pd      *protection_domain;
 struct ibv_cq      *completion_queue;
 static struct ibv_qp      *queue_pair;
 
-static char *buf;
+static void *buf;
 static struct ibv_mr *mr;
 static struct ibv_ah *ah;
 
 static int allocate_buf()
 {
-    buf = memalign(page_size, PACKET_SIZE + 40);
-    if (!buf) {
+    if (posix_memalign(&buf, page_size, PACKET_SIZE + 40)) {
         fprintf(stderr, "Couldn't allocate work buf.\n");
         return 1;
     }
