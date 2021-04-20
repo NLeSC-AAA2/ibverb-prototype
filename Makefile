@@ -2,22 +2,18 @@
 CFLAGS=-Wall -Wextra -g
 
 .PHONY: default clean
-default: ud_server ud_client
+default: rdma_server rdma_client
 
 clean:
-	rm ud_client ud_server *.o
+	rm rdma_client rdma_server *.o
 
-rdma.o: rdma.c rdma.h
+%.o: %.c
 	gcc $(CFLAGS) -c $<
 
-ud_server.o: ud_server.c rdma.h
-	gcc $(CFLAGS) -c $<
+rdma.o rdma_server.o rdma_client.o: rdma.h
 
-ud_server: ud_server.o rdma.o
+rdma_server: rdma_server.o rdma.o
 	gcc -o $@ $^ /lib64/libibverbs.so.1
 
-ud_client.o: ud_client.c rdma.h
-	gcc $(CFLAGS) -c $<
-
-ud_client: ud_client.o rdma.o
+rdma_client: rdma_client.o rdma.o
 	gcc -o $@ $^ /lib64/libibverbs.so.1
