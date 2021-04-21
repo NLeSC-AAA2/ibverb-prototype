@@ -1,6 +1,9 @@
 CFLAGS=-std=c11 -Wall -Wextra -pedantic -g
 
-.PHONY: rdma clean
+.PHONY: udp rdma clean
+
+udp: udp.o
+	gcc -o $@ $^
 
 rdma: rdma_server rdma_client
 
