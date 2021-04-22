@@ -1,4 +1,4 @@
-#define _POSIX_SOURCE
+#define _POSIX_C_SOURCE 200112L
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 static int packet_loop = 1;
 
@@ -67,6 +68,7 @@ client_loop(int sock, char *address, char *port)
             freeaddrinfo(res);
             exit(EXIT_FAILURE);
         }
+        sleep(1);
     }
 
     freeaddrinfo(res);
