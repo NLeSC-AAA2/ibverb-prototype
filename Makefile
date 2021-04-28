@@ -5,6 +5,9 @@ CFLAGS=-std=c11 -Wall -Wextra -pedantic -g
 udp: udp.o
 	gcc -o $@ $^
 
+raw: raw.o
+	gcc -o $@ $^
+
 rdma: rdma_server rdma_client
 
 clean:
