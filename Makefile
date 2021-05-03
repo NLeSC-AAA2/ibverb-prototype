@@ -11,7 +11,7 @@ raw: raw.o
 rdma: rdma_server rdma_client
 
 clean:
-	rm rdma_client rdma_server *.o
+	rm rdma_client rdma_server udp raw *.o
 
 rdma.o rdma_server.o rdma_client.o: rdma.h
 
