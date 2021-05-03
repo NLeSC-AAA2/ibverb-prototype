@@ -1,3 +1,8 @@
+/*
+ * Copyright 2021 Netherlands eScience Center and ASTRON.
+ * Licensed under the Apache License, version 2.0. See LICENSE for details.
+ */
+
 #define _POSIX_C_SOURCE 200112L
 #include <sys/types.h>
 #include <sys/socket.h>
