@@ -3,6 +3,7 @@
  * Licensed under the Apache License, version 2.0. See LICENSE for details.
  */
 
+#define _POSIX_C_SOURCE 200809L
 #include <arpa/inet.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,7 +18,7 @@ static int page_size, send_flags;
 
 static struct ibv_context *context;
 static struct ibv_pd      *protection_domain;
-struct ibv_cq      *completion_queue;
+struct ibv_cq             *completion_queue;
 static struct ibv_qp      *queue_pair;
 
 static void *buf;
@@ -79,7 +80,7 @@ static void rdma_init(char *dev_name)
         goto clean_context;
     }
 
-    struct ibv_port_attr port_info = {};
+    struct ibv_port_attr port_info;
     if (ibv_query_port(context, IB_PORT, &port_info)) {
         fprintf(stderr, "Failed to query port info.\n");
         goto clean_device;

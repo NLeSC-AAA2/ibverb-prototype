@@ -29,12 +29,12 @@
  * SOFTWARE.
  *
  */
-
+#define _POSIX_C_SOURCE 200809L
 #include <arpa/inet.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
+#include <time.h>
 
 #include "rdma.h"
 
@@ -84,7 +84,10 @@ int main(int argc, char *argv[])
             result = EXIT_FAILURE;
             goto cleanup;
         } else if (ne == 0) {
-            usleep(1000);
+            struct timespec sleep_time;
+            sleep_time.tv_sec = 1;
+            sleep_time.tv_nsec = 0;
+            nanosleep(&sleep_time, NULL);
         } else {
             fprintf(stderr, "received %d messages\n", ne);
         }
