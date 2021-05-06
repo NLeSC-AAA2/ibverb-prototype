@@ -195,12 +195,12 @@ int main(int argc, char **argv)
     ip_header->frag_off = 0;
     ip_header->ttl = 255;
     ip_header->protocol = IPPROTO_UDP;
-    ip_header->check = 0;
     ip_header->daddr = remote.ipv4;
     ip_header->saddr = local.ipv4;
 
     udp_header->dest = htons(atoi(argv[1]));
     udp_header->source = htons(4242);
+    udp_header->check = 0;
 
     int count = 0;
     while (packet_loop) {
@@ -216,8 +216,8 @@ int main(int argc, char **argv)
         ip_header->tot_len = htons(ip_length);
 
         udp_header->len = htons(8 + msg_size);
-        udp_header->check = 0;
 
+        ip_header->check = 0;
         ip_header->check = ipv4check(ip_header, sizeof *ip_header);
 
         int result = sendto(sock, ether_buffer, total_length, 0, (struct sockaddr *) &device, sizeof (device));
