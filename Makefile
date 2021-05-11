@@ -8,9 +8,12 @@ udp: udp.o
 raw: raw.o
 	gcc -o $@ $^
 
+raw_ibverbs: raw_ibverbs.o
+	gcc -o $@ $^ -lz
+
 rdma: rdma_server rdma_client
 
-all: udp raw rdma
+all: udp raw raw_ibverbs rdma
 
 clean:
 	rm rdma_client rdma_server udp raw *.o
