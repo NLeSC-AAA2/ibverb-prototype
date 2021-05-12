@@ -9,7 +9,7 @@ raw: raw.o
 	gcc -o $@ $^
 
 raw_ibverbs: raw_ibverbs.o
-	gcc -o $@ $^ -lz
+	gcc -o $@ $^
 
 rdma: rdma_server rdma_client
 
