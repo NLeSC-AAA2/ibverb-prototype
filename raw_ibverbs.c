@@ -19,6 +19,8 @@
 #include "lookup_addr.h"
 
 static int packet_loop = 1;
+static int sock = 0;
+static struct sockaddr_ll device = { 0 };
 
 void stop_loop(int sig)
 {
@@ -177,58 +179,15 @@ ib_checksum(struct ib_packet *packet)
     return crc;
 }
 
-int main(int argc, char **argv)
+void ib_send_loop(struct addr *src, struct addr *dest, uint32_t qp)
 {
-    struct sigaction handler;
-    memset(&handler, 0, sizeof handler);
-    handler.sa_handler = &stop_loop;
-
-    if (sigaction(SIGINT, &handler, NULL)) {
-        perror("Couldn't install signal handler");
-        exit(EXIT_FAILURE);
-    }
-
-    char *ifname = "eth4";
-    if (argc == 4) {
-        ifname = argv[3];
-    } else if (argc != 3) {
-        fprintf(stderr, "Incorrect number of arguments.\n");
-        exit(EXIT_FAILURE);
-    }
-
-    int sock = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
-    if (sock == -1) {
-        perror("Error creating socket");
-        exit(EXIT_FAILURE);
-    }
-
-    struct addr local = lookup_local_addr(sock, ifname);
-    printf("Local address:\n");
-    print_addr(&local);
-
-    struct addr remote = lookup_remote_addr(ifname, argv[1], NULL);
-    printf("\nRemote address:\n");
-    print_addr(&remote);
-    printf("\n");
-
-    struct sockaddr_ll device;
-    memset(&device, 0, sizeof (device));
-    if ((device.sll_ifindex = if_nametoindex(ifname)) == 0) {
-        perror("if_nametoindex() failed to obtain interface index ");
-        exit(EXIT_FAILURE);
-    }
-
-    device.sll_family = AF_PACKET;
-    device.sll_halen = 6;
-    memcpy(device.sll_addr, remote.mac, ETH_ALEN);
-
     ether_header->h_proto = htons(0x8915);
-    memcpy(ether_header->h_dest, remote.mac, ETH_ALEN);
-    memcpy(ether_header->h_source, local.mac, ETH_ALEN);
+    memcpy(ether_header->h_dest, dest->mac, ETH_ALEN);
+    memcpy(ether_header->h_source, src->mac, ETH_ALEN);
 
     memcpy(ether_buffer, ibdata, sizeof ibdata);
 
-    ib_packet->bth.destination_qp = htonl(atoi(argv[2]) << 8);
+    ib_packet->bth.destination_qp = htonl(qp << 8);
     print_ib_packet(ib_packet);
     printf("\n");
 
@@ -253,6 +212,52 @@ int main(int argc, char **argv)
         }
         sleep(1);
     }
+}
+
+int main(int argc, char **argv)
+{
+    struct sigaction handler;
+    memset(&handler, 0, sizeof handler);
+    handler.sa_handler = &stop_loop;
+
+    if (sigaction(SIGINT, &handler, NULL)) {
+        perror("Couldn't install signal handler");
+        exit(EXIT_FAILURE);
+    }
+
+    char *ifname = "eth4";
+    if (argc == 4) {
+        ifname = argv[3];
+    } else if (argc != 3) {
+        fprintf(stderr, "Incorrect number of arguments.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    sock = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+    if (sock == -1) {
+        perror("Error creating socket");
+        exit(EXIT_FAILURE);
+    }
+
+    struct addr local = lookup_local_addr(sock, ifname);
+    printf("Local address:\n");
+    print_addr(&local);
+
+    struct addr remote = lookup_remote_addr(ifname, argv[1], NULL);
+    printf("\nRemote address:\n");
+    print_addr(&remote);
+    printf("\n");
+
+    if ((device.sll_ifindex = if_nametoindex(ifname)) == 0) {
+        perror("if_nametoindex() failed to obtain interface index ");
+        exit(EXIT_FAILURE);
+    }
+
+    device.sll_family = AF_PACKET;
+    device.sll_halen = 6;
+    memcpy(device.sll_addr, remote.mac, ETH_ALEN);
+
+    ib_send_loop(&local, &remote, atoi(argv[2]));
 
     return 0;
 }
