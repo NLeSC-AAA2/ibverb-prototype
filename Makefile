@@ -5,10 +5,10 @@ CFLAGS=-std=c11 -Wall -Wextra -pedantic -g -isystemsys/
 udp: udp.o
 	gcc -o $@ $^
 
-raw: raw.o
+raw: raw.o lookup_addr.o
 	gcc -o $@ $^
 
-raw_ibverbs: raw_ibverbs.o crc32.o
+raw_ibverbs: raw_ibverbs.o crc32.o lookup_addr.o
 	gcc -o $@ $^
 
 rdma: rdma_server rdma_client
