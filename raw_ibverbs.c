@@ -177,25 +177,6 @@ ib_checksum(struct ib_packet *packet)
     return crc;
 }
 
-uint16_t ipv4check(void *raw_data, int n)
-{
-    uint16_t *data = (uint16_t*) raw_data;
-    n = 1 + ((n - 1) / 2);
-
-    int32_t sum = 0;
-    uint16_t answer;
-
-    for (int i = 0; i < n; i++) {
-        sum += data[i];
-    }
-
-    sum = (sum >> 16) + (sum & 0xffff);
-    sum = sum + (sum >> 16);
-    answer = (uint16_t) ~sum;
-
-    return answer;
-}
-
 int main(int argc, char **argv)
 {
     struct sigaction handler;
