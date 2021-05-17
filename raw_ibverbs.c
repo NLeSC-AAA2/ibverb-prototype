@@ -6,6 +6,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <arpa/inet.h>
 #include <net/if.h>
 #include <signal.h>
 #include <stdio.h>
@@ -65,8 +66,14 @@ print_grh(struct ib_grh *hdr)
     printf("Next header: %d\n", hdr->next_header);
     printf("Hop limit: %d\n", hdr->hop_limit);
 
-    //uint8_t source[16];
-    //uint8_t dest[16];
+    char ip[INET6_ADDRSTRLEN];
+    struct in6_addr addr_ipv6 = { 0 };
+
+    memcpy(&addr_ipv6, hdr->source, sizeof hdr->source);
+    printf("Source: %s\n", inet_ntop(AF_INET6, &addr_ipv6, ip, sizeof ip));
+
+    memcpy(&addr_ipv6, hdr->dest, sizeof hdr->dest);
+    printf("Dest: %s\n", inet_ntop(AF_INET6, &addr_ipv6, ip, sizeof ip));
 }
 
 struct __attribute__((__packed__)) ib_bth {
