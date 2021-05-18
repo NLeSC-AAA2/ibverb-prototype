@@ -28,11 +28,6 @@ void stop_loop(int sig)
     packet_loop = 0;
 }
 
-static char ether_buffer[IP_MAXPACKET];
-unsigned char ibdata[] = {
-#include "packet.data"
-};
-
 struct __attribute__((__packed__)) ib_grh {
 #if __BYTE_ORDER == __LITTLE_ENDIAN
     uint32_t traffic_class_p1: 4;
@@ -152,9 +147,13 @@ print_ib_packet(struct ib_packet *packet)
     print_deth(&packet->deth);
 }
 
+static char ether_buffer[IP_MAXPACKET] = { 0 };
 static struct ethhdr *ether_header = (struct ethhdr*) ether_buffer;
 static struct ib_packet *ib_packet = (struct ib_packet*) &ether_buffer[sizeof *ether_header];
-//static char *raw_data = &ether_buffer[sizeof *ether_header + sizeof *ib_packet];
+static char *raw_data = &ether_buffer[sizeof *ether_header + sizeof *ib_packet];
+
+static const size_t header_size = sizeof *ether_header + sizeof *ib_packet;
+static const size_t max_msg_size = IP_MAXPACKET - header_size - sizeof(uint32_t);
 
 uint32_t
 ib_checksum(struct ib_packet *packet)
@@ -191,14 +190,22 @@ void ib_send_loop(struct addr *src, struct addr *dest, uint32_t qp)
     memcpy(ether_header->h_dest, dest->mac, ETH_ALEN);
     memcpy(ether_header->h_source, src->mac, ETH_ALEN);
 
-    memcpy(ether_buffer, ibdata, sizeof ibdata);
+    ib_packet->grh.ip_version = 6;
+    ib_packet->grh.next_header = 27;
+    ib_packet->grh.hop_limit = 1;
 
+    memcpy(ib_packet->grh.source, &src->ipv6, sizeof src->ipv6);
+    memcpy(ib_packet->grh.dest, &dest->ipv6, sizeof dest->ipv6);
+
+    ib_packet->bth.opcode = 0x64; //UD - send only
+    ib_packet->bth.sollicited_event = 0;
+    ib_packet->bth.migration_request = 1;
+
+    ib_packet->bth.partition_key = htons(0xFFFF);
     ib_packet->bth.destination_qp = htonl(qp << 8);
-    print_ib_packet(ib_packet);
-    printf("\n");
 
-    uint32_t *checksum = (uint32_t*) &ether_buffer[sizeof ibdata - 4];
-    *checksum = ib_checksum(ib_packet);
+    ib_packet->deth.queue_key = htonl(0x11111111);
+    ib_packet->deth.source_qp = htonl(0x182 << 8);
 
     int sock = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
     if (sock == -1) {
@@ -206,17 +213,25 @@ void ib_send_loop(struct addr *src, struct addr *dest, uint32_t qp)
         exit(EXIT_FAILURE);
     }
 
-    //int count = 0;
+    int count = 0;
     while (packet_loop) {
-    /*
-        int msg_size = snprintf(udp_data, max_msg_size, "Message: %d", count++);
+        int msg_size = snprintf(raw_data, max_msg_size, "Message: %d", count++);
         if (msg_size < 0 || (size_t) msg_size >= max_msg_size) {
             perror("Error creating message");
             exit(EXIT_FAILURE);
         }
-        */
 
-        uint16_t total_length = sizeof ibdata;
+        msg_size = 1024;
+        ib_packet->grh.payload_length = htons(msg_size + sizeof ib_packet->bth + sizeof ib_packet->deth + 4);
+
+        uint32_t *checksum = (uint32_t*) &raw_data[msg_size];
+        *checksum = ib_checksum(ib_packet);
+
+        uint32_t total_length = ntohs(ib_packet->grh.payload_length) + sizeof ib_packet->grh + sizeof *ether_header;
+
+        print_ib_packet(ib_packet);
+        printf("\n");
+
         int result = sendto(sock, ether_buffer, total_length, 0, (struct sockaddr *) &device, sizeof (device));
         if (result == -1) {
             perror("Error sending message");
