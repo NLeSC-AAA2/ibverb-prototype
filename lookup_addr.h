@@ -12,6 +12,7 @@
 struct addr {
     char mac[ETH_ALEN];
     uint32_t ipv4;
+    struct in6_addr ipv6;
 };
 
 void print_addr(struct addr *remote);
@@ -20,5 +21,5 @@ struct addr
 lookup_remote_addr(char *interface, char *host, char *port);
 
 struct addr
-lookup_local_addr(int sock, char *interface);
+lookup_local_addr(char *interface);
 #endif

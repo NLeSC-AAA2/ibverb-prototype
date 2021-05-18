@@ -14,7 +14,9 @@
 #include <net/if.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <linux/if_packet.h>
 
+#include <ifaddrs.h>
 #include <netdb.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,15 +26,17 @@
 #include "lookup_addr.h"
 
 void
-print_addr(struct addr *remote)
+print_addr(struct addr *addr)
 {
-    struct in_addr addr_ipv4 = { 0 };
-    addr_ipv4.s_addr = remote->ipv4;
+    char ip[INET6_ADDRSTRLEN];
 
-    printf("IPv4: %s\n", inet_ntoa(addr_ipv4));
+    struct in_addr addr_ipv4 = { 0 };
+    addr_ipv4.s_addr = addr->ipv4;
+    printf("IPv4: %s\n", inet_ntop(AF_INET, &addr_ipv4, ip, sizeof ip));
+    printf("IPv6: %s\n", inet_ntop(AF_INET6, &addr->ipv6, ip, sizeof ip));
 
     struct ether_addr addr_eth = { 0 };
-    memcpy(addr_eth.ether_addr_octet, remote->mac, ETH_ALEN);
+    memcpy(addr_eth.ether_addr_octet, addr->mac, ETH_ALEN);
 
     printf("MAC: %s\n", ether_ntoa(&addr_eth));
 }
@@ -77,23 +81,50 @@ lookup_remote_addr(char *interface, char *host, char *port)
 }
 
 struct addr
-lookup_local_addr(int sock, char *interface)
+lookup_local_addr(char *interface)
 {
-    struct ifreq req = { 0 };
     struct addr local = { 0 };
 
-    strncpy(req.ifr_name, interface, IFNAMSIZ);
-    if (ioctl(sock, SIOCGIFHWADDR, &req) != 0) {
-        perror("failed to lookup MAC address ");
-        exit(EXIT_FAILURE);
-    }
-    memcpy(local.mac, req.ifr_addr.sa_data, ETH_ALEN);
+    struct ifaddrs *if_addrs;
+    struct ifaddrs *curr;
 
-    if (ioctl(sock, SIOCGIFADDR, &req) != 0) {
-        perror("failed to lookup IP address ");
+    if (getifaddrs(&if_addrs)) {
+        perror("failed to enumerate NICs");
         exit(EXIT_FAILURE);
     }
-    local.ipv4 = ((struct sockaddr_in*) &req.ifr_addr)->sin_addr.s_addr;
+
+    for (curr = if_addrs; curr != NULL; curr = curr->ifa_next) {
+        if (strcmp(interface, curr->ifa_name)) {
+            continue;
+        }
+
+        switch (curr->ifa_addr->sa_family) {
+          case AF_INET: {
+              struct sockaddr_in *ipv4 = (struct sockaddr_in*) curr->ifa_addr;
+              local.ipv4 = ipv4->sin_addr.s_addr;
+              break;
+          }
+
+          case AF_INET6: {
+            struct sockaddr_in6 *ipv6 = (struct sockaddr_in6*) curr->ifa_addr;
+            memcpy(&local.ipv6, &ipv6->sin6_addr, sizeof ipv6->sin6_addr);
+            break;
+          }
+
+          case AF_PACKET: {
+            struct sockaddr_ll *mac = (struct sockaddr_ll*) curr->ifa_addr;
+            memcpy(local.mac, &mac->sll_addr, ETH_ALEN);
+            break;
+          }
+
+          default: {
+            printf("Found unknown IF family type!\n");
+            break;
+          }
+        }
+    }
+
+    freeifaddrs(if_addrs);
 
     return local;
 }

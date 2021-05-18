@@ -20,7 +20,6 @@
 #include "lookup_addr.h"
 
 static int packet_loop = 1;
-static int sock = 0;
 static struct sockaddr_ll device = { 0 };
 
 void stop_loop(int sig)
@@ -201,6 +200,12 @@ void ib_send_loop(struct addr *src, struct addr *dest, uint32_t qp)
     uint32_t *checksum = (uint32_t*) &ether_buffer[sizeof ibdata - 4];
     *checksum = ib_checksum(ib_packet);
 
+    int sock = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+    if (sock == -1) {
+        perror("Error creating socket");
+        exit(EXIT_FAILURE);
+    }
+
     //int count = 0;
     while (packet_loop) {
     /*
@@ -240,13 +245,7 @@ int main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
 
-    sock = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
-    if (sock == -1) {
-        perror("Error creating socket");
-        exit(EXIT_FAILURE);
-    }
-
-    struct addr local = lookup_local_addr(sock, ifname);
+    struct addr local = lookup_local_addr(ifname);
     printf("Local address:\n");
     print_addr(&local);
 

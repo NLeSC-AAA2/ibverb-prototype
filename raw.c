@@ -72,13 +72,7 @@ int main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
 
-    int sock = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
-    if (sock == -1) {
-        perror("Error creating socket");
-        exit(EXIT_FAILURE);
-    }
-
-    struct addr local = lookup_local_addr(sock, ifname);
+    struct addr local = lookup_local_addr(ifname);
     printf("Local address:\n");
     print_addr(&local);
 
@@ -114,6 +108,12 @@ int main(int argc, char **argv)
     udp_header->dest = htons(atoi(argv[1]));
     udp_header->source = htons(4242);
     udp_header->check = 0;
+
+    int sock = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+    if (sock == -1) {
+        perror("Error creating socket");
+        exit(EXIT_FAILURE);
+    }
 
     int count = 0;
     while (packet_loop) {
