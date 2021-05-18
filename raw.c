@@ -76,7 +76,7 @@ int main(int argc, char **argv)
     printf("Local address:\n");
     print_addr(&local);
 
-    struct addr remote = lookup_remote_addr(ifname, argv[2], argv[1]);
+    struct addr remote = lookup_remote_addr(ifname, argv[2], NULL);
     printf("\nRemote address:\n");
     print_addr(&remote);
 

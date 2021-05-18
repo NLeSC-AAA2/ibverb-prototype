@@ -238,9 +238,9 @@ int main(int argc, char **argv)
     }
 
     char *ifname = "eth4";
-    if (argc == 4) {
-        ifname = argv[3];
-    } else if (argc != 3) {
+    if (argc == 5) {
+        ifname = argv[4];
+    } else if (argc != 4) {
         fprintf(stderr, "Incorrect number of arguments.\n");
         exit(EXIT_FAILURE);
     }
@@ -249,7 +249,7 @@ int main(int argc, char **argv)
     printf("Local address:\n");
     print_addr(&local);
 
-    struct addr remote = lookup_remote_addr(ifname, argv[1], NULL);
+    struct addr remote = lookup_remote_addr(ifname, argv[1], argv[2]);
     printf("\nRemote address:\n");
     print_addr(&remote);
     printf("\n");
@@ -263,7 +263,7 @@ int main(int argc, char **argv)
     device.sll_halen = 6;
     memcpy(device.sll_addr, remote.mac, ETH_ALEN);
 
-    ib_send_loop(&local, &remote, atoi(argv[2]));
+    ib_send_loop(&local, &remote, atoi(argv[3]));
 
     return 0;
 }

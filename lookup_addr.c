@@ -42,7 +42,7 @@ print_addr(struct addr *addr)
 }
 
 struct addr
-lookup_remote_addr(char *interface, char *host, char *port)
+lookup_remote_addr(char *interface, char *host, char *ipv6)
 {
     struct addr remote = { 0 };
     struct addrinfo hints = { 0 };
@@ -51,7 +51,7 @@ lookup_remote_addr(char *interface, char *host, char *port)
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_DGRAM;
 
-    int result = getaddrinfo(host, port, &hints, &res);
+    int result = getaddrinfo(host, NULL, &hints, &res);
     if (result != 0) {
         fprintf(stderr, "Error finding remote adddress: %s\n",
                 gai_strerror(result));
@@ -76,6 +76,8 @@ lookup_remote_addr(char *interface, char *host, char *port)
 
     memcpy(remote.mac, req.arp_ha.sa_data, ETH_ALEN);
     remote.ipv4 = ((struct sockaddr_in*) res->ai_addr)->sin_addr.s_addr;
+
+    if (ipv6) inet_pton(AF_INET6, ipv6, &remote.ipv6);
 
     return remote;
 }
