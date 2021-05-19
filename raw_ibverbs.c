@@ -170,13 +170,11 @@ static const size_t
 max_msg_size = IP_MAXPACKET - total_header_size - checksum_size;
 
 uint32_t
-ib_checksum(struct ib_packet *packet)
+ib_header_checksum(struct ib_packet *packet)
 {
     uint64_t ib_padding = ~0;
     struct ib_grh grh = packet->grh;
     struct ib_bth bth = packet->bth;
-
-    size_t data_length = ntohs(packet->grh.payload_length) - sizeof bth - 4;
 
     grh.traffic_class_p1 = ~0;
     grh.traffic_class_p2 = ~0;
@@ -186,12 +184,24 @@ ib_checksum(struct ib_packet *packet)
     bth.reserved1 = ~0;
 
     uint32_t crc = 0;
-    unsigned char *raw = (unsigned char*) &crc;
     crc = crc32(crc, (const unsigned char*) &ib_padding, sizeof ib_padding);
     crc = crc32(crc, (const unsigned char*) &grh, sizeof grh);
     crc = crc32(crc, (const unsigned char*) &bth, sizeof bth);
-    crc = crc32(crc, (const unsigned char*) &packet->deth, data_length);
+    crc = crc32(crc, (const unsigned char*) &packet->deth, sizeof packet->deth);
 
+    return crc;
+}
+
+uint32_t
+ib_checksum(struct ib_packet *packet)
+{
+    size_t data_length = ntohs(packet->grh.payload_length);
+    data_length -= ib_transport_header_size + checksum_size;
+
+    uint32_t crc = ib_header_checksum(packet);
+    crc = crc32(crc, (const unsigned char*) packet->data, data_length);
+
+    unsigned char *raw = (unsigned char*) &crc;
     printf("%x\n", crc);
     printf("%x %x %x %x\n", raw[0], raw[1], raw[2], raw[3]);
 
