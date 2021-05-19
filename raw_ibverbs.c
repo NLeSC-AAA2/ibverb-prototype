@@ -8,6 +8,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <net/if.h>
+#include <assert.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -167,7 +168,7 @@ static const size_t
 total_header_size = sizeof *ether_header + sizeof *ib_packet;
 
 static const size_t
-max_msg_size = IP_MAXPACKET - total_header_size - checksum_size;
+msg_size = 1024;
 
 uint32_t
 ib_header_checksum(struct ib_packet *packet)
@@ -208,7 +209,12 @@ ib_checksum(struct ib_packet *packet)
     return crc;
 }
 
-void init_invariant_ib_headers(struct addr *src, struct addr *dest, uint32_t qp)
+uint32_t
+init_invariant_ib_headers
+( struct addr *src
+, struct addr *dest
+, uint32_t qp
+)
 {
     ether_header->h_proto = htons(0x8915);
     memcpy(ether_header->h_dest, dest->mac, ETH_ALEN);
@@ -221,6 +227,9 @@ void init_invariant_ib_headers(struct addr *src, struct addr *dest, uint32_t qp)
     memcpy(ib_packet->grh.source, &src->ipv6, sizeof src->ipv6);
     memcpy(ib_packet->grh.dest, &dest->ipv6, sizeof dest->ipv6);
 
+    uint32_t ib_length = msg_size + ib_transport_header_size + checksum_size;
+    ib_packet->grh.payload_length = htons(ib_length);
+
     ib_packet->bth.opcode = 0x64; //UD - send only
     ib_packet->bth.sollicited_event = 0;
     ib_packet->bth.migration_request = 1;
@@ -230,10 +239,14 @@ void init_invariant_ib_headers(struct addr *src, struct addr *dest, uint32_t qp)
 
     ib_packet->deth.queue_key = htonl(0x11111111);
     ib_packet->deth.source_qp = htonl(0x182 << 8);
+
+    return ib_header_checksum(ib_packet);
 }
 
-void ib_host_send_loop()
+void ib_host_send_loop(uint32_t header_crc, uint32_t msg_size)
 {
+    int result;
+
     int sock = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
     if (sock == -1) {
         perror("Error creating socket");
@@ -242,25 +255,20 @@ void ib_host_send_loop()
 
     int count = 0;
     while (packet_loop) {
-        int msg_size = snprintf(ib_packet->data, max_msg_size, "Message: %d", count++);
-        if (msg_size < 0 || (size_t) msg_size >= max_msg_size) {
+        result = snprintf(ib_packet->data, msg_size, "Message: %d", count++);
+        if (result < 0 || (size_t) result >= msg_size) {
             perror("Error creating message");
             exit(EXIT_FAILURE);
         }
 
-        msg_size = 1024;
-        uint32_t ib_length = msg_size + ib_transport_header_size + checksum_size;
-        uint32_t total_length = total_header_size + msg_size + checksum_size;
-
-        ib_packet->grh.payload_length = htons(ib_length);
-
+        uint32_t length = total_header_size + msg_size + checksum_size;
         uint32_t *checksum = (uint32_t*) &ib_packet->data[msg_size];
-        *checksum = ib_checksum(ib_packet);
+        *checksum = crc32(header_crc, (unsigned char*) ib_packet->data, msg_size);
 
         print_ib_packet(ib_packet);
         printf("\n");
 
-        int result = sendto(sock, ether_buffer, total_length, 0, (struct sockaddr *) &device, sizeof (device));
+        result = sendto(sock, ether_buffer, length, 0, (struct sockaddr *) &device, sizeof (device));
         if (result == -1) {
             perror("Error sending message");
             exit(EXIT_FAILURE);
@@ -279,6 +287,8 @@ int main(int argc, char **argv)
         perror("Couldn't install signal handler");
         exit(EXIT_FAILURE);
     }
+
+    assert(sizeof ether_buffer - total_header_size - checksum_size > msg_size + checksum_size);
 
     char *ifname = "eth4";
     if (argc == 5) {
@@ -306,8 +316,9 @@ int main(int argc, char **argv)
     device.sll_halen = 6;
     memcpy(device.sll_addr, remote.mac, ETH_ALEN);
 
-    init_invariant_ib_headers(&local, &remote, atoi(argv[3]));
-    ib_host_send_loop();
+    uint32_t header_crc = init_invariant_ib_headers(&local, &remote, atoi(argv[3]));
+
+    ib_host_send_loop(header_crc, msg_size);
 
     return 0;
 }
