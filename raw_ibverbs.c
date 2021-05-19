@@ -200,7 +200,7 @@ ib_checksum(struct ib_packet *packet)
     return crc;
 }
 
-void ib_send_loop(struct addr *src, struct addr *dest, uint32_t qp)
+void init_invariant_ib_headers(struct addr *src, struct addr *dest, uint32_t qp)
 {
     ether_header->h_proto = htons(0x8915);
     memcpy(ether_header->h_dest, dest->mac, ETH_ALEN);
@@ -222,7 +222,10 @@ void ib_send_loop(struct addr *src, struct addr *dest, uint32_t qp)
 
     ib_packet->deth.queue_key = htonl(0x11111111);
     ib_packet->deth.source_qp = htonl(0x182 << 8);
+}
 
+void ib_host_send_loop()
+{
     int sock = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
     if (sock == -1) {
         perror("Error creating socket");
@@ -295,7 +298,8 @@ int main(int argc, char **argv)
     device.sll_halen = 6;
     memcpy(device.sll_addr, remote.mac, ETH_ALEN);
 
-    ib_send_loop(&local, &remote, atoi(argv[3]));
+    init_invariant_ib_headers(&local, &remote, atoi(argv[3]));
+    ib_host_send_loop();
 
     return 0;
 }
