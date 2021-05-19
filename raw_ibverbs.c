@@ -135,6 +135,7 @@ struct __attribute__((__packed__)) ib_packet {
     struct ib_grh grh;
     struct ib_bth bth;
     struct ib_deth deth;
+    char data[];
 };
 
 void
@@ -155,9 +156,6 @@ ether_header = (struct ethhdr*) ether_buffer;
 
 static struct ib_packet *
 ib_packet = (struct ib_packet*) &ether_buffer[sizeof *ether_header];
-
-static char *
-raw_data = &ether_buffer[sizeof *ether_header + sizeof *ib_packet];
 
 static const uint32_t
 checksum_size = sizeof(uint32_t);
@@ -234,7 +232,7 @@ void ib_host_send_loop()
 
     int count = 0;
     while (packet_loop) {
-        int msg_size = snprintf(raw_data, max_msg_size, "Message: %d", count++);
+        int msg_size = snprintf(ib_packet->data, max_msg_size, "Message: %d", count++);
         if (msg_size < 0 || (size_t) msg_size >= max_msg_size) {
             perror("Error creating message");
             exit(EXIT_FAILURE);
@@ -246,7 +244,7 @@ void ib_host_send_loop()
 
         ib_packet->grh.payload_length = htons(ib_length);
 
-        uint32_t *checksum = (uint32_t*) &raw_data[msg_size];
+        uint32_t *checksum = (uint32_t*) &ib_packet->data[msg_size];
         *checksum = ib_checksum(ib_packet);
 
         print_ib_packet(ib_packet);
