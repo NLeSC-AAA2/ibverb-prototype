@@ -147,13 +147,29 @@ print_ib_packet(struct ib_packet *packet)
     print_deth(&packet->deth);
 }
 
-static char ether_buffer[IP_MAXPACKET] = { 0 };
-static struct ethhdr *ether_header = (struct ethhdr*) ether_buffer;
-static struct ib_packet *ib_packet = (struct ib_packet*) &ether_buffer[sizeof *ether_header];
-static char *raw_data = &ether_buffer[sizeof *ether_header + sizeof *ib_packet];
+static char
+ether_buffer[IP_MAXPACKET] = { 0 };
 
-static const size_t header_size = sizeof *ether_header + sizeof *ib_packet;
-static const size_t max_msg_size = IP_MAXPACKET - header_size - sizeof(uint32_t);
+static struct ethhdr *
+ether_header = (struct ethhdr*) ether_buffer;
+
+static struct ib_packet *
+ib_packet = (struct ib_packet*) &ether_buffer[sizeof *ether_header];
+
+static char *
+raw_data = &ether_buffer[sizeof *ether_header + sizeof *ib_packet];
+
+static const uint32_t
+checksum_size = sizeof(uint32_t);
+
+static const uint32_t
+ib_transport_header_size = sizeof ib_packet->bth + sizeof ib_packet->deth;
+
+static const size_t
+total_header_size = sizeof *ether_header + sizeof *ib_packet;
+
+static const size_t
+max_msg_size = IP_MAXPACKET - total_header_size - checksum_size;
 
 uint32_t
 ib_checksum(struct ib_packet *packet)
@@ -222,12 +238,13 @@ void ib_send_loop(struct addr *src, struct addr *dest, uint32_t qp)
         }
 
         msg_size = 1024;
-        ib_packet->grh.payload_length = htons(msg_size + sizeof ib_packet->bth + sizeof ib_packet->deth + 4);
+        uint32_t ib_length = msg_size + ib_transport_header_size + checksum_size;
+        uint32_t total_length = total_header_size + msg_size + checksum_size;
+
+        ib_packet->grh.payload_length = htons(ib_length);
 
         uint32_t *checksum = (uint32_t*) &raw_data[msg_size];
         *checksum = ib_checksum(ib_packet);
-
-        uint32_t total_length = ntohs(ib_packet->grh.payload_length) + sizeof ib_packet->grh + sizeof *ether_header;
 
         print_ib_packet(ib_packet);
         printf("\n");
