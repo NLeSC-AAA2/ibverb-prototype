@@ -5,7 +5,9 @@
 
 #define _GNU_SOURCE
 #include <netinet/ether.h>
+#if __GLIBC__ >= 2 && __GLIBC_MINOR__ > 17
 #undef _GNU_SOURCE
+#endif
 
 #define _POSIX_C_SOURCE 200809L
 #include <sys/ioctl.h>
