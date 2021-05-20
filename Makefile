@@ -10,7 +10,7 @@ udp: udp.o
 raw: raw.o lookup_addr.o
 	gcc -o $@ $^
 
-raw_ibverbs: raw_ibverbs.o crc32.o lookup_addr.o opencl_utils.o
+raw_ibverbs: raw_ibverbs.o crc32.o lookup_addr.o opencl_utils.o raw_packet.o
 	g++ $(shell aocl link-config) -o $@ $^
 
 rdma: rdma_server rdma_client

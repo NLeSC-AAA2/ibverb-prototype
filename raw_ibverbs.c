@@ -19,6 +19,7 @@
 
 #include "crc32.h"
 #include "lookup_addr.h"
+#include "raw_packet.h"
 
 static int packet_loop = 1;
 static struct sockaddr_ll device = { 0 };
@@ -28,131 +29,6 @@ void stop_loop(int sig)
     (void) sig;
     packet_loop = 0;
 }
-
-struct __attribute__((__packed__)) ib_grh {
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-    uint32_t traffic_class_p1: 4;
-    uint32_t ip_version: 4;
-    uint32_t traffic_class_p2: 4;
-    uint32_t flow_label: 20;
-#else
-#error "Not implemented"
-#endif
-
-    uint16_t payload_length;
-
-    uint8_t next_header;
-    uint8_t hop_limit;
-
-    uint8_t source[16];
-    uint8_t dest[16];
-};
-
-void
-print_grh(struct ib_grh *hdr)
-{
-    printf("IP Version: %d\n", hdr->ip_version);
-    printf("Traffic class 1: %x\n", hdr->traffic_class_p1);
-    printf("Traffic class 2: %x\n", hdr->traffic_class_p2);
-    printf("Flow label: %x\n", hdr->flow_label);
-
-    printf("Length: %d\n", ntohs(hdr->payload_length));
-
-    printf("Next header: %d\n", hdr->next_header);
-    printf("Hop limit: %d\n", hdr->hop_limit);
-
-    char ip[INET6_ADDRSTRLEN];
-    struct in6_addr addr_ipv6 = { 0 };
-
-    memcpy(&addr_ipv6, hdr->source, sizeof hdr->source);
-    printf("Source: %s\n", inet_ntop(AF_INET6, &addr_ipv6, ip, sizeof ip));
-
-    memcpy(&addr_ipv6, hdr->dest, sizeof hdr->dest);
-    printf("Dest: %s\n", inet_ntop(AF_INET6, &addr_ipv6, ip, sizeof ip));
-}
-
-struct __attribute__((__packed__)) ib_bth {
-    uint8_t opcode;
-
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-    uint8_t transport_hdr_version: 4;
-    uint8_t pad_count: 2;
-    uint8_t migration_request: 1;
-    uint8_t sollicited_event: 1;
-#else
-#error "Not implemented"
-#endif
-
-    uint16_t partition_key;
-
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-    uint32_t reserved1: 8;
-    uint32_t destination_qp: 24;
-#else
-#error "Not implemented"
-#endif
-
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-    uint32_t acknowledge_req: 1;
-    uint32_t reserved2: 7;
-    uint32_t packet_sequence: 24;
-#else
-#error "Not implemented"
-#endif
-};
-
-void
-print_bth(struct ib_bth *hdr)
-{
-    printf("Opcode: 0x%x\n", hdr->opcode);
-
-    printf("Sollicited: %d\n", hdr->sollicited_event);
-    printf("Migration req: %d\n", hdr->migration_request);
-    printf("Pad count: %d\n", hdr->pad_count);
-    printf("Header version: %d\n", hdr->transport_hdr_version);
-
-    printf("Partition key: %d\n", ntohs(hdr->partition_key));
-    printf("Destination QP: 0x%x\n", ntohl(hdr->destination_qp) >> 8);
-
-    printf("Acknowledge req: %d\n", hdr->acknowledge_req);
-    printf("Packet sequence number: %d\n", hdr->packet_sequence);
-}
-
-struct __attribute__((__packed__)) ib_deth {
-    uint32_t queue_key;
-
-    uint32_t reserved: 8;
-    uint32_t source_qp: 24;
-};
-
-void
-print_deth(struct ib_deth *hdr)
-{
-    printf("Queue key: 0x%x\n", ntohl(hdr->queue_key));
-    printf("Source QP: 0x%x\n", ntohl(hdr->source_qp) >> 8);
-}
-
-struct __attribute__((__packed__)) ib_headers {
-    struct ib_grh grh;
-    struct ib_bth bth;
-    struct ib_deth deth;
-};
-
-void
-print_ib_headers(struct ib_headers *hdr)
-{
-    print_grh(&hdr->grh);
-    printf("\n");
-    print_bth(&hdr->bth);
-    printf("\n");
-    print_deth(&hdr->deth);
-}
-
-struct __attribute__((__packed__)) packet {
-    struct ethhdr ether_header;
-    struct ib_headers ib_header;
-    unsigned char data[];
-};
 
 static char
 raw_buffer[IP_MAXPACKET] = { 0 };
