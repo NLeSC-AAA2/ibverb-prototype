@@ -1,3 +1,7 @@
+/*
+ * Copyright 2021 Netherlands eScience Center and ASTRON.
+ * Licensed under the Apache License, version 2.0. See LICENSE for details.
+ */
 #ifndef OPENCL_UTILS_HPP
 #define OPENCL_UTILS_HPP
 #define CL_HPP_TARGET_OPENCL_VERSION 200

@@ -1,3 +1,7 @@
+/*
+ * Copyright 2021 Netherlands eScience Center and ASTRON.
+ * Licensed under the Apache License, version 2.0. See LICENSE for details.
+ */
 #include <fstream>
 #include <iostream>
 #include "opencl_utils.hpp"
