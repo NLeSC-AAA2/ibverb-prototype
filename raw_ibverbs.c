@@ -132,26 +132,26 @@ print_deth(struct ib_deth *hdr)
     printf("Source QP: 0x%x\n", ntohl(hdr->source_qp) >> 8);
 }
 
-struct __attribute__((__packed__)) ib_packet {
+struct __attribute__((__packed__)) ib_headers {
     struct ib_grh grh;
     struct ib_bth bth;
     struct ib_deth deth;
-    char data[];
 };
 
 void
-print_ib_packet(struct ib_packet *packet)
+print_ib_headers(struct ib_headers *hdr)
 {
-    print_grh(&packet->grh);
+    print_grh(&hdr->grh);
     printf("\n");
-    print_bth(&packet->bth);
+    print_bth(&hdr->bth);
     printf("\n");
-    print_deth(&packet->deth);
+    print_deth(&hdr->deth);
 }
 
 struct __attribute__((__packed__)) packet {
     struct ethhdr ether_header;
-    struct ib_packet ib_packet;
+    struct ib_headers ib_header;
+    unsigned char data[];
 };
 
 static char
@@ -166,17 +166,17 @@ static const uint32_t
 ib_transport_header_size = sizeof (struct ib_bth) + sizeof (struct ib_deth);
 
 static const size_t
-total_header_size = sizeof (struct ethhdr) + sizeof (struct ib_packet);
+total_header_size = sizeof (struct ethhdr) + sizeof (struct ib_headers);
 
 static const size_t
 msg_size = 1024;
 
 uint32_t
-ib_header_checksum(struct ib_packet *packet)
+ib_header_checksum(struct ib_headers *header)
 {
     uint64_t ib_padding = ~0;
-    struct ib_grh grh = packet->grh;
-    struct ib_bth bth = packet->bth;
+    struct ib_grh grh = header->grh;
+    struct ib_bth bth = header->bth;
 
     grh.traffic_class_p1 = ~0;
     grh.traffic_class_p2 = ~0;
@@ -189,19 +189,19 @@ ib_header_checksum(struct ib_packet *packet)
     crc = crc32(crc, (const unsigned char*) &ib_padding, sizeof ib_padding);
     crc = crc32(crc, (const unsigned char*) &grh, sizeof grh);
     crc = crc32(crc, (const unsigned char*) &bth, sizeof bth);
-    crc = crc32(crc, (const unsigned char*) &packet->deth, sizeof packet->deth);
+    crc = crc32(crc, (const unsigned char*) &header->deth, sizeof header->deth);
 
     return crc;
 }
 
 uint32_t
-ib_checksum(struct ib_packet *packet)
+ib_checksum(struct packet *packet)
 {
-    size_t data_length = ntohs(packet->grh.payload_length);
+    size_t data_length = ntohs(packet->ib_header.grh.payload_length);
     data_length -= ib_transport_header_size + checksum_size;
 
-    uint32_t crc = ib_header_checksum(packet);
-    crc = crc32(crc, (const unsigned char*) packet->data, data_length);
+    uint32_t crc = ib_header_checksum(&packet->ib_header);
+    crc = crc32(crc, packet->data, data_length);
 
     unsigned char *raw = (unsigned char*) &crc;
     printf("%x\n", crc);
@@ -211,7 +211,7 @@ ib_checksum(struct ib_packet *packet)
 }
 
 uint32_t
-init_invariant_ib_headers
+init_invariant_headers
 ( struct packet *packet
 , struct addr *src
 , struct addr *dest
@@ -222,27 +222,27 @@ init_invariant_ib_headers
     memcpy(packet->ether_header.h_dest, dest->mac, ETH_ALEN);
     memcpy(packet->ether_header.h_source, src->mac, ETH_ALEN);
 
-    packet->ib_packet.grh.ip_version = 6;
-    packet->ib_packet.grh.next_header = 27;
-    packet->ib_packet.grh.hop_limit = 1;
+    packet->ib_header.grh.ip_version = 6;
+    packet->ib_header.grh.next_header = 27;
+    packet->ib_header.grh.hop_limit = 1;
 
-    memcpy(packet->ib_packet.grh.source, &src->ipv6, sizeof src->ipv6);
-    memcpy(packet->ib_packet.grh.dest, &dest->ipv6, sizeof dest->ipv6);
+    memcpy(packet->ib_header.grh.source, &src->ipv6, sizeof src->ipv6);
+    memcpy(packet->ib_header.grh.dest, &dest->ipv6, sizeof dest->ipv6);
 
     uint32_t ib_length = msg_size + ib_transport_header_size + checksum_size;
-    packet->ib_packet.grh.payload_length = htons(ib_length);
+    packet->ib_header.grh.payload_length = htons(ib_length);
 
-    packet->ib_packet.bth.opcode = 0x64; //UD - send only
-    packet->ib_packet.bth.sollicited_event = 0;
-    packet->ib_packet.bth.migration_request = 1;
+    packet->ib_header.bth.opcode = 0x64; //UD - send only
+    packet->ib_header.bth.sollicited_event = 0;
+    packet->ib_header.bth.migration_request = 1;
 
-    packet->ib_packet.bth.partition_key = htons(0xFFFF);
-    packet->ib_packet.bth.destination_qp = htonl(qp << 8);
+    packet->ib_header.bth.partition_key = htons(0xFFFF);
+    packet->ib_header.bth.destination_qp = htonl(qp << 8);
 
-    packet->ib_packet.deth.queue_key = htonl(0x11111111);
-    packet->ib_packet.deth.source_qp = htonl(0x182 << 8);
+    packet->ib_header.deth.queue_key = htonl(0x11111111);
+    packet->ib_header.deth.source_qp = htonl(0x182 << 8);
 
-    return ib_header_checksum(&packet->ib_packet);
+    return ib_header_checksum(&packet->ib_header);
 }
 
 void
@@ -258,20 +258,20 @@ ib_host_send_loop(struct packet *packet, uint32_t header_crc, uint32_t msg_size)
 
     int count = 0;
     while (packet_loop) {
-        result = snprintf(packet->ib_packet.data, msg_size, "Message: %d", count++);
+        result = snprintf((char*) packet->data, msg_size, "Message: %d", count++);
         if (result < 0 || (size_t) result >= msg_size) {
             perror("Error creating message");
             exit(EXIT_FAILURE);
         }
 
         uint32_t length = total_header_size + msg_size + checksum_size;
-        uint32_t *checksum = (uint32_t*) &packet->ib_packet.data[msg_size];
-        *checksum = crc32(header_crc, (unsigned char*) packet->ib_packet.data, msg_size);
+        uint32_t *checksum = (uint32_t*) &packet->data[msg_size];
+        *checksum = crc32(header_crc, packet->data, msg_size);
 
-        print_ib_packet(&packet->ib_packet);
+        print_ib_headers(&packet->ib_header);
         printf("\n");
 
-        result = sendto(sock, raw_buffer, length, 0, (struct sockaddr *) &device, sizeof (device));
+        result = sendto(sock, packet, length, 0, (struct sockaddr *) &device, sizeof (device));
         if (result == -1) {
             perror("Error sending message");
             exit(EXIT_FAILURE);
@@ -319,7 +319,7 @@ int main(int argc, char **argv)
     device.sll_halen = 6;
     memcpy(device.sll_addr, remote.mac, ETH_ALEN);
 
-    uint32_t header_crc = init_invariant_ib_headers(full_packet, &local, &remote, atoi(argv[3]));
+    uint32_t header_crc = init_invariant_headers(full_packet, &local, &remote, atoi(argv[3]));
 
     ib_host_send_loop(full_packet, header_crc, msg_size);
 
