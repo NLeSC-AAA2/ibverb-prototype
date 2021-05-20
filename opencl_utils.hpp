@@ -11,7 +11,7 @@
 std::string errorMessage(cl_int error);
 
 template <unsigned N>
-void set_args_n(cl::Kernel &k) {}
+void set_args_n(cl::Kernel&) {}
 
 template <unsigned N, typename First, typename ...Rest>
 void set_args_n(cl::Kernel &k, First &&first, Rest &&...rest)
