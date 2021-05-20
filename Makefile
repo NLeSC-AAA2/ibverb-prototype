@@ -1,4 +1,4 @@
-FLAG:=-Wall -Wextra -pedantic -g -isystemsys/
+FLAGS:=-Wall -Wextra -pedantic -g -isystemsys/
 CFLAGS:=-std=c11 $(FLAGS)
 CXXFLAGS:=-std=c++11 $(FLAGS)
 
