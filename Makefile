@@ -1,4 +1,6 @@
-CFLAGS=-std=c11 -Wall -Wextra -pedantic -g -isystemsys/
+FLAG:=-Wall -Wextra -pedantic -g -isystemsys/
+CFLAGS:=-std=c11 $(FLAGS)
+CXXFLAGS:=-std=c++11 $(FLAGS)
 
 .PHONY: rdma clean all
 
@@ -8,8 +10,8 @@ udp: udp.o
 raw: raw.o lookup_addr.o
 	gcc -o $@ $^
 
-raw_ibverbs: raw_ibverbs.o crc32.o lookup_addr.o
-	gcc -o $@ $^
+raw_ibverbs: raw_ibverbs.o crc32.o lookup_addr.o opencl_utils.o
+	g++ $(shell aocl link-config) -o $@ $^
 
 rdma: rdma_server rdma_client
 
@@ -25,3 +27,6 @@ rdma_%: rdma_%.o rdma.o
 
 %.o: %.c
 	gcc $(CFLAGS) -c $<
+
+%.o: %.cc
+	g++ $(CXXFLAGS) $(shell aocl compile-config) -c $<
