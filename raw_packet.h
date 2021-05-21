@@ -5,12 +5,11 @@
 #ifndef RAW_PACKET_H
 #define RAW_PACKET_H
 #include <netinet/if_ether.h>
+#include "constants.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#define MSG_SIZE 1024
 
 struct __attribute__((__packed__)) ib_grh {
 #if __BYTE_ORDER == __LITTLE_ENDIAN
