@@ -5,3 +5,6 @@ rdma_client
 udp
 raw
 raw_ibverbs
+ibverbs/
+ibverbs.*.temp/
+ibverbs.aoc?
