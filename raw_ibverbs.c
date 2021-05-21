@@ -30,10 +30,7 @@ void stop_loop(int sig)
     packet_loop = 0;
 }
 
-static char
-raw_buffer[IP_MAXPACKET] = { 0 };
-
-static struct packet *full_packet = (struct packet*) raw_buffer;
+static struct packet full_packet = { 0 };
 
 static const uint32_t
 checksum_size = sizeof(uint32_t);
@@ -43,9 +40,6 @@ ib_transport_header_size = sizeof (struct ib_bth) + sizeof (struct ib_deth);
 
 static const size_t
 total_header_size = sizeof (struct ethhdr) + sizeof (struct ib_headers);
-
-static const size_t
-msg_size = 1024;
 
 uint32_t
 ib_header_checksum(struct ib_headers *header)
@@ -105,7 +99,7 @@ init_invariant_headers
     memcpy(packet->ib_header.grh.source, &src->ipv6, sizeof src->ipv6);
     memcpy(packet->ib_header.grh.dest, &dest->ipv6, sizeof dest->ipv6);
 
-    uint32_t ib_length = msg_size + ib_transport_header_size + checksum_size;
+    uint32_t ib_length = MSG_SIZE + ib_transport_header_size + checksum_size;
     packet->ib_header.grh.payload_length = htons(ib_length);
 
     packet->ib_header.bth.opcode = 0x64; //UD - send only
@@ -122,7 +116,7 @@ init_invariant_headers
 }
 
 void
-ib_host_send_loop(struct packet *packet, uint32_t header_crc, uint32_t msg_size)
+ib_host_send_loop(struct packet *packet, uint32_t header_crc)
 {
     int result;
 
@@ -134,15 +128,15 @@ ib_host_send_loop(struct packet *packet, uint32_t header_crc, uint32_t msg_size)
 
     int count = 0;
     while (packet_loop) {
-        result = snprintf((char*) packet->data, msg_size, "Message: %d", count++);
-        if (result < 0 || (size_t) result >= msg_size) {
+        result = snprintf((char*) packet->data, MSG_SIZE, "Message: %d", count++);
+        if (result < 0 || (size_t) result >= MSG_SIZE) {
             perror("Error creating message");
             exit(EXIT_FAILURE);
         }
 
-        uint32_t length = total_header_size + msg_size + checksum_size;
-        uint32_t *checksum = (uint32_t*) &packet->data[msg_size];
-        *checksum = crc32(header_crc, packet->data, msg_size);
+        uint32_t length = MSG_SIZE + total_header_size + checksum_size;
+        uint32_t *checksum = (uint32_t*) &packet->data[MSG_SIZE];
+        *checksum = crc32(header_crc, packet->data, MSG_SIZE);
 
         print_ib_headers(&packet->ib_header);
         printf("\n");
@@ -166,8 +160,6 @@ int main(int argc, char **argv)
         perror("Couldn't install signal handler");
         exit(EXIT_FAILURE);
     }
-
-    assert(sizeof raw_buffer - total_header_size - checksum_size > msg_size);
 
     char *ifname = "eth4";
     if (argc == 5) {
@@ -195,9 +187,9 @@ int main(int argc, char **argv)
     device.sll_halen = 6;
     memcpy(device.sll_addr, remote.mac, ETH_ALEN);
 
-    uint32_t header_crc = init_invariant_headers(full_packet, &local, &remote, atoi(argv[3]));
+    uint32_t header_crc = init_invariant_headers(&full_packet, &local, &remote, atoi(argv[3]));
 
-    ib_host_send_loop(full_packet, header_crc, msg_size);
+    ib_host_send_loop(&full_packet, header_crc);
 
     return 0;
 }

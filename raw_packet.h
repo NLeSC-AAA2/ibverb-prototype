@@ -10,6 +10,8 @@
 extern "C" {
 #endif
 
+#define MSG_SIZE 1024
+
 struct __attribute__((__packed__)) ib_grh {
 #if __BYTE_ORDER == __LITTLE_ENDIAN
     uint32_t traffic_class_p1: 4;
@@ -75,7 +77,7 @@ struct __attribute__((__packed__)) ib_headers {
 struct __attribute__((__packed__)) packet {
     struct ethhdr ether_header;
     struct ib_headers ib_header;
-    unsigned char data[];
+    unsigned char data[MSG_SIZE];
 };
 
 void print_grh(struct ib_grh *hdr);
