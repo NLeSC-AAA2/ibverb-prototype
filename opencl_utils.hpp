@@ -40,7 +40,13 @@ class Kernel
     template<typename... Args>
     void operator()(Args&&... args)
     {
-        set_args(kernel, std::forward<Args>(args)...);
+        try {
+            set_args(kernel, std::forward<Args>(args)...);
+        } catch (const cl::Error& err) {
+            std::cerr << "Error: " << err.what() << std::endl;
+            std::cerr << errorMessage(err.err()) << std::endl;
+            exit(EXIT_FAILURE);
+        }
         queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(1), cl::NullRange, nullptr, &event);
     }
 
