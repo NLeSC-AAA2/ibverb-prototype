@@ -19,6 +19,7 @@
 
 #include "crc32.h"
 #include "lookup_addr.h"
+#include "fpga_host.h"
 #include "raw_packet.h"
 
 static int packet_loop = 1;
