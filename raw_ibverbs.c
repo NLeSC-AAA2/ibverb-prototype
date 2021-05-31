@@ -180,13 +180,20 @@ int main(int argc, char **argv)
             exit(EXIT_FAILURE);
         }
 
-    } else if (argc == 9 && !strcmp("fpga", argv[1])) {
+    } else if ((argc == 6 || argc == 9) && !strcmp("fpga", argv[1])) {
         use_fpga = true;
-        local = addr_from_strings(argv[2], argv[3], argv[4]);
-        remote = addr_from_strings(argv[5], argv[6], argv[7]);
-        queue_pair = atoi(argv[8]);
+        if (argc == 6) {
+            local = addr_from_strings("04:3f:72:d4:2f:7c", "10.149.5.104", "fe80::63f:72ff:fed4:2f7c");
+            remote = addr_from_strings(argv[2], argv[3], argv[4]);
+            queue_pair = atoi(argv[5]);
+        } else {
+            local = addr_from_strings(argv[2], argv[3], argv[4]);
+            remote = addr_from_strings(argv[5], argv[6], argv[7]);
+            queue_pair = atoi(argv[8]);
+        }
     } else {
         fprintf(stderr, "Usage: raw_ibverbs host <dest IPv4> <dest IB GID> <IB QP> [<interface name>]\n");
+        fprintf(stderr, "       raw_ibverbs fpga <dest MAC> <dest IPv4> <dest IB GID> <IB QP>\n");
         fprintf(stderr, "       raw_ibverbs fpga <src MAC> <src IPv4> <src IB GID> <dest MAC> <dest IPv4> <dest IB GID> <IB QP>\n");
         exit(EXIT_FAILURE);
     }
