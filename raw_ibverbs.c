@@ -10,6 +10,7 @@
 #include <net/if.h>
 #include <assert.h>
 #include <signal.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -162,35 +163,49 @@ int main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
 
-    char *ifname = "eth4";
-    if (argc == 5) {
-        ifname = argv[4];
-    } else if (argc != 4) {
-        fprintf(stderr, "Usage: raw_ibverbs <destination IPv4> <IB GID> <IB QP> [<interface name>]\n");
+    uint32_t queue_pair;
+    bool use_fpga = false;
+    struct addr local = { 0 };
+    struct addr remote = { 0 };
+
+    if ((argc == 5 || argc == 6) && !strcmp("host", argv[1])) {
+        char *ifname = argc == 6 ? argv[5] : "eth4";
+
+        local = lookup_local_addr(ifname);
+        remote = lookup_remote_addr(ifname, argv[2], argv[3]);
+        queue_pair = atoi(argv[4]);
+
+        if ((device.sll_ifindex = if_nametoindex(ifname)) == 0) {
+            perror("if_nametoindex() failed to obtain interface index ");
+            exit(EXIT_FAILURE);
+        }
+
+    } else if (argc == 9 && !strcmp("fpga", argv[1])) {
+        use_fpga = true;
+        local = addr_from_strings(argv[2], argv[3], argv[4]);
+        remote = addr_from_strings(argv[5], argv[6], argv[7]);
+        queue_pair = atoi(argv[8]);
+    } else {
+        fprintf(stderr, "Usage: raw_ibverbs host <dest IPv4> <dest IB GID> <IB QP> [<interface name>]\n");
+        fprintf(stderr, "       raw_ibverbs fpga <src MAC> <src IPv4> <src IB GID> <dest MAC> <dest IPv4> <dest IB GID> <IB QP>\n");
         exit(EXIT_FAILURE);
     }
 
-    struct addr local = lookup_local_addr(ifname);
     printf("Local address:\n");
     print_addr(&local);
 
-    struct addr remote = lookup_remote_addr(ifname, argv[1], argv[2]);
     printf("\nRemote address:\n");
     print_addr(&remote);
     printf("\n");
-
-    if ((device.sll_ifindex = if_nametoindex(ifname)) == 0) {
-        perror("if_nametoindex() failed to obtain interface index ");
-        exit(EXIT_FAILURE);
-    }
 
     device.sll_family = AF_PACKET;
     device.sll_halen = 6;
     memcpy(device.sll_addr, remote.mac, ETH_ALEN);
 
-    uint32_t header_crc = init_invariant_headers(&full_packet, &local, &remote, atoi(argv[3]));
+    uint32_t header_crc = init_invariant_headers(&full_packet, &local, &remote, queue_pair);
 
-    ib_host_send_loop(&full_packet, header_crc);
+    if (use_fpga) ib_fpga_send_loop(&full_packet, header_crc);
+    else ib_host_send_loop(&full_packet, header_crc);
 
     return 0;
 }

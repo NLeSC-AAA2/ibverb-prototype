@@ -132,3 +132,19 @@ lookup_local_addr(char *interface)
 
     return local;
 }
+
+struct addr
+addr_from_strings(char *mac, char *ipv4_string, char *ib_gid)
+{
+    struct addr result = { 0 };
+    struct in_addr ipv4 = { 0 };
+
+    struct ether_addr *eth_addr = ether_aton(mac);
+    memcpy(result.mac, eth_addr->ether_addr_octet, ETH_ALEN);
+
+    inet_pton(AF_INET, ipv4_string, &ipv4);
+    result.ipv4 = ipv4.s_addr;
+    inet_pton(AF_INET6, ib_gid, &result.ipv6);
+
+    return result;
+}

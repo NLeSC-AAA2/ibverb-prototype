@@ -22,4 +22,7 @@ lookup_remote_addr(char *interface, char *host, char *port);
 
 struct addr
 lookup_local_addr(char *interface);
+
+struct addr
+addr_from_strings(char *mac, char *ipv4, char *ib_gid);
 #endif

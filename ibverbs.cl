@@ -40,7 +40,6 @@ write_ibverb_packet
         if (i == (size - 1) / 32U)
             line.flags |= FLAG_LAST | ((-size % 32U) << 3);
 
-        if (chan == 0) write_channel_intel(ch_out0, line);
-        else write_channel_intel(ch_out1, line);
+        write_channel_intel(ch_out1, line);
     }
 }
