@@ -54,7 +54,7 @@ int main(int argc, char *argv[])
     int result = EXIT_SUCCESS;
 
     if (argc != 2) {
-        fprintf(stderr, "Insufficient arguments\n");
+        fprintf(stderr, "Usage: rdma_server <IB driver>\n");
         return EXIT_FAILURE;
     }
 

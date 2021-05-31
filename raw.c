@@ -68,7 +68,7 @@ int main(int argc, char **argv)
     if (argc == 4) {
         ifname = argv[3];
     } else if (argc != 3) {
-        fprintf(stderr, "Incorrect number of arguments.\n");
+        fprintf(stderr, "Usage: raw <UDP port> <destination IP> [<interface name>]\n");
         exit(EXIT_FAILURE);
     }
 

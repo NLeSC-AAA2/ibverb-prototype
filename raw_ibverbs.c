@@ -166,7 +166,7 @@ int main(int argc, char **argv)
     if (argc == 5) {
         ifname = argv[4];
     } else if (argc != 4) {
-        fprintf(stderr, "Incorrect number of arguments.\n");
+        fprintf(stderr, "Usage: raw_ibverbs <destination IPv4> <IB GID> <IB QP> [<interface name>]\n");
         exit(EXIT_FAILURE);
     }
 

@@ -118,7 +118,7 @@ int main(int argc, char **argv)
     if (argc == 2) {
         local_port = argv[1];
     } else if (argc != 3) {
-        fprintf(stderr, "Incorrect number of arguments.\n");
+        fprintf(stderr, "Usage: udp <port number> [<destination IP>]\n");
         exit(EXIT_FAILURE);
     }
 
