@@ -27,14 +27,14 @@ static struct ibv_ah *ah;
 
 static int allocate_buf()
 {
-    if (posix_memalign(&buf, page_size, PACKET_SIZE + 40)) {
+    if (posix_memalign(&buf, page_size, MSG_SIZE + 40)) {
         fprintf(stderr, "Couldn't allocate work buf.\n");
         return 1;
     }
 
-    memset(buf, 0x7b, PACKET_SIZE + 40);
+    memset(buf, 0x7b, MSG_SIZE + 40);
 
-    mr = ibv_reg_mr(protection_domain, buf, PACKET_SIZE + 40, IBV_ACCESS_LOCAL_WRITE);
+    mr = ibv_reg_mr(protection_domain, buf, MSG_SIZE + 40, IBV_ACCESS_LOCAL_WRITE);
     if (!mr) {
         fprintf(stderr, "Couldn't register memory region.\n");
         goto clean_buf;
@@ -267,8 +267,8 @@ void rdma_cleanup()
 int post_sends(uint32_t qpn, int n)
 {
     struct ibv_sge list = {
-        .addr   = (uintptr_t) buf + 40,
-        .length = PACKET_SIZE,
+        .addr   = (uintptr_t) buf,
+        .length = MSG_SIZE,
         .lkey   = mr->lkey
     };
     struct ibv_send_wr wr = {
@@ -300,7 +300,7 @@ int post_recvs(int n)
 {
     struct ibv_sge list = {
         .addr   = (uintptr_t) buf,
-        .length = PACKET_SIZE + 40,
+        .length = MSG_SIZE + 40,
         .lkey   = mr->lkey
     };
     struct ibv_recv_wr wr = {

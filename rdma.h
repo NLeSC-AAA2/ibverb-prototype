@@ -16,7 +16,7 @@
 #endif
 #endif
 
-#define PACKET_SIZE 1024
+#include "constants.h"
 
 extern struct ibv_cq *completion_queue;
 
