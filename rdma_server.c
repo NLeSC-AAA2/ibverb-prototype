@@ -50,6 +50,7 @@ int main(int argc, char *argv[])
 {
     (void) argc;
     (void) argv;
+    const int completion_queue_size = 50;
 
     int result = EXIT_SUCCESS;
 
@@ -67,10 +68,10 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    rdma_init_server(argv[1]);
+    rdma_init_server(argv[1], completion_queue_size);
 
-    int outstanding = post_recvs(RECV_QUEUE_SIZE);
-    if (outstanding < RECV_QUEUE_SIZE) {
+    int outstanding = post_recvs(completion_queue_size);
+    if (outstanding < completion_queue_size) {
         fprintf(stderr, "Couldn't post receive (%d)\n", outstanding);
         result = EXIT_FAILURE;
         goto cleanup;
@@ -104,8 +105,8 @@ int main(int argc, char *argv[])
 
         outstanding -= ne;
         if (outstanding <= 1) {
-            outstanding += post_recvs(RECV_QUEUE_SIZE - outstanding);
-            if (outstanding < RECV_QUEUE_SIZE) {
+            outstanding += post_recvs(completion_queue_size - outstanding);
+            if (outstanding < completion_queue_size) {
                 fprintf(stderr, "Couldn't post receive (%d)\n", outstanding);
                 result = EXIT_FAILURE;
                 goto cleanup;

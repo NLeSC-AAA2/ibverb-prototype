@@ -39,8 +39,6 @@
 
 #include "rdma.h"
 
-#define SEND_QUEUE_SIZE 1
-
 static int client_loop = 1;
 
 void stop_loop(int sig)
@@ -51,6 +49,7 @@ void stop_loop(int sig)
 
 int main(int argc, char *argv[])
 {
+    const int completion_queue_size = 1;
     int qpn;
     int lid;
     union ibv_gid gid;
@@ -74,10 +73,10 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    rdma_init_client(argv[1], lid, gid);
+    rdma_init_client(argv[1], completion_queue_size, lid, gid);
 
-    int outstanding = post_sends(qpn, SEND_QUEUE_SIZE);
-    if (outstanding < SEND_QUEUE_SIZE) {
+    int outstanding = post_sends(qpn, completion_queue_size);
+    if (outstanding < completion_queue_size) {
         fprintf(stderr, "Couldn't post receive (%d)\n", outstanding);
         result = EXIT_FAILURE;
         goto cleanup;
@@ -105,9 +104,9 @@ int main(int argc, char *argv[])
         }
 
         outstanding -= ne;
-        if (outstanding <= SEND_QUEUE_SIZE) {
-            outstanding += post_sends(qpn, SEND_QUEUE_SIZE - outstanding);
-            if (outstanding < SEND_QUEUE_SIZE) {
+        if (outstanding <= completion_queue_size) {
+            outstanding += post_sends(qpn, completion_queue_size - outstanding);
+            if (outstanding < completion_queue_size) {
                 fprintf(stderr, "Couldn't post send (%d)\n", outstanding);
                 result = EXIT_FAILURE;
                 goto cleanup;

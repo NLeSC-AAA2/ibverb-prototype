@@ -47,7 +47,7 @@ static int allocate_buf()
     return 1;
 }
 
-static void rdma_init(char *dev_name)
+static void rdma_init(char *dev_name, int completion_queue_size)
 {
     page_size = sysconf(_SC_PAGESIZE);
     send_flags = IBV_SEND_SIGNALED;
@@ -94,7 +94,7 @@ static void rdma_init(char *dev_name)
         goto clean_context;
     }
 
-    completion_queue = ibv_create_cq(context, RECV_QUEUE_SIZE + 1, NULL, NULL, 0);
+    completion_queue = ibv_create_cq(context, completion_queue_size, NULL, NULL, 0);
     if (!completion_queue) {
         fprintf(stderr, "Failed to create completion queue.\n");
         goto clean_protection_domain;
@@ -105,7 +105,7 @@ static void rdma_init(char *dev_name)
         .recv_cq = completion_queue,
         .cap     = {
             .max_send_wr  = 1,
-            .max_recv_wr  = RECV_QUEUE_SIZE,
+            .max_recv_wr  = completion_queue_size,
             .max_send_sge = 1,
             .max_recv_sge = 1
         },
@@ -161,12 +161,12 @@ static void rdma_init(char *dev_name)
     exit(EXIT_FAILURE);
 }
 
-void rdma_init_server(char *dev_name)
+void rdma_init_server(char *dev_name, int completion_queue_size)
 {
     union ibv_gid gid;
     char gid_string[33];
 
-    rdma_init(dev_name);
+    rdma_init(dev_name, completion_queue_size);
 
     if (ibv_query_gid(context, IB_PORT, 0, &gid)) {
         fprintf(stderr, "Could not get local gid for gid index 0\n");
@@ -190,9 +190,11 @@ void rdma_init_server(char *dev_name)
     fprintf(stderr, "LID: %d\nQPN: %d\nGID: %s\n", port_attr.lid, queue_pair->qp_num, gid_string);
 }
 
-void rdma_init_client(char *dev_name, int lid, union ibv_gid gid)
+void
+rdma_init_client
+(char *dev_name, int completion_queue_size, int lid, union ibv_gid gid)
 {
-    rdma_init(dev_name);
+    rdma_init(dev_name, completion_queue_size);
 
     struct ibv_qp_attr attr;
     attr.qp_state = IBV_QPS_RTS;
