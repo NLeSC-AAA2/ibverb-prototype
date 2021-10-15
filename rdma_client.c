@@ -50,13 +50,17 @@ void stop_loop(int sig)
 int main(int argc, char *argv[])
 {
     const int completion_queue_size = 1;
+    int send_limit = 0;
+    int send_count = 0;
     int qpn;
     int lid;
     union ibv_gid gid;
     int result = EXIT_SUCCESS;
 
-    if (argc != 5) {
-        fprintf(stderr, "Usage: rdma_client <IB driver> <IB GID> <IB LID> <IB QP>\n");
+    if (argc == 6) {
+        send_limit = atoi(argv[5]);
+    } else if (argc != 5) {
+        fprintf(stderr, "Usage: rdma_client <IB driver> <IB GID> <IB LID> <IB QP> [COUNT]\n");
         return EXIT_FAILURE;
     }
 
@@ -83,7 +87,7 @@ int main(int argc, char *argv[])
     }
 
     struct ibv_wc wc[10];
-    while (client_loop) {
+    while (client_loop && (send_limit == 0 || send_count < send_limit)) {
         int ne = ibv_poll_cq(completion_queue, 10, wc);
         if (ne < 0) {
             fprintf(stderr, "poll CQ failed %d\n", ne);
@@ -91,6 +95,7 @@ int main(int argc, char *argv[])
             goto cleanup;
         } else {
             fprintf(stderr, "sent %d messages\n", ne);
+            send_count += ne;
         }
 
         for (int i = 0; i < ne; ++i) {
@@ -112,6 +117,7 @@ int main(int argc, char *argv[])
                 goto cleanup;
             }
         }
+        sleep(1);
     }
 
   cleanup:
