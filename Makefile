@@ -3,6 +3,7 @@ CFLAGS:=-std=c11 $(FLAGS)
 CXXFLAGS:=-std=c++11 $(FLAGS)
 
 .PHONY: rdma clean all kernel
+.DEFAULT_GOAL:=rdma
 
 udp: udp.o
 	gcc -o $@ $^
