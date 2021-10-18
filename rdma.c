@@ -21,21 +21,23 @@ static struct ibv_pd      *protection_domain;
 struct ibv_cq             *completion_queue;
 static struct ibv_qp      *queue_pair;
 
-static void *buf;
-static struct ibv_mr *mr;
-static struct ibv_ah *ah;
+static void *buf = NULL;
+static struct ibv_mr *mr = NULL;
+static struct ibv_ah *ah = NULL;
 
-static int allocate_buf()
+static void internal_rdma_cleanup();
+
+static int allocate_buf(void **buffer, struct ibv_mr **memory_region, size_t size)
 {
-    if (posix_memalign(&buf, page_size, MSG_SIZE + 40)) {
+    if (posix_memalign(buffer, page_size, size)) {
         fprintf(stderr, "Couldn't allocate work buf.\n");
         return 1;
     }
 
-    memset(buf, 0x7b, MSG_SIZE + 40);
+    memset(*buffer, 0x7b, size);
 
-    mr = ibv_reg_mr(protection_domain, buf, MSG_SIZE + 40, IBV_ACCESS_LOCAL_WRITE);
-    if (!mr) {
+    *memory_region = ibv_reg_mr(protection_domain, *buffer, size, IBV_ACCESS_LOCAL_WRITE);
+    if (!*memory_region) {
         fprintf(stderr, "Couldn't register memory region.\n");
         goto clean_buf;
     }
@@ -43,7 +45,8 @@ static int allocate_buf()
     return 0;
 
   clean_buf:
-    free(buf);
+    free(*buffer);
+    *buffer = NULL;
     return 1;
 }
 
@@ -140,8 +143,6 @@ static void rdma_init(char *dev_name, int completion_queue_size)
         goto clean_queue_pair;
     }
 
-    if (allocate_buf()) goto clean_queue_pair;
-
     return;
 
   clean_queue_pair:
@@ -167,6 +168,8 @@ void rdma_init_server(char *dev_name, int completion_queue_size)
     char gid_string[33];
 
     rdma_init(dev_name, completion_queue_size);
+
+    if (allocate_buf(&buf, &mr, MSG_SIZE + 40)) internal_rdma_cleanup();
 
     if (ibv_query_gid(context, IB_PORT, 0, &gid)) {
         fprintf(stderr, "Could not get local gid for gid index 0\n");
@@ -195,6 +198,8 @@ rdma_init_client
 (char *dev_name, int completion_queue_size, int lid, union ibv_gid gid)
 {
     rdma_init(dev_name, completion_queue_size);
+
+    if (allocate_buf(&buf, &mr, MSG_SIZE + 40)) internal_rdma_cleanup();
 
     struct ibv_qp_attr attr;
     attr.qp_state = IBV_QPS_RTS;
@@ -234,14 +239,19 @@ void rdma_cleanup()
         exit(EXIT_FAILURE);
     }
 
+    free(buf);
+
+    internal_rdma_cleanup();
+}
+
+static void internal_rdma_cleanup()
+{
     if (ah) {
         if (ibv_destroy_ah(ah)) {
             fprintf(stderr, "Couldn't destroy AH.\n");
             exit(EXIT_FAILURE);
         }
     }
-
-    free(buf);
 
     if (ibv_destroy_qp(queue_pair)) {
         fprintf(stderr, "Couldn't destroy queue pair.\n");
@@ -312,8 +322,12 @@ int post_recvs(int n)
 
     int i;
     for (i = 0; i < n; ++i) {
-        if (ibv_post_recv(queue_pair, &wr, &bad_wr))
+        int result = ibv_post_recv(queue_pair, &wr, &bad_wr);
+        if (result) {
+            fprintf(stderr, "post receive #%d failed (%d) with errno: %d\n", i, result, errno);
+
             break;
+        }
     }
 
     return i;
