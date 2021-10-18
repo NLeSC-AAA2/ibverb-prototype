@@ -21,8 +21,10 @@ static struct ibv_pd      *protection_domain;
 struct ibv_cq             *completion_queue;
 static struct ibv_qp      *queue_pair;
 
+static void *header_buf = NULL;
 static void *buf = NULL;
 static struct ibv_mr *mr = NULL;
+static struct ibv_mr *header_mr = NULL;
 static struct ibv_ah *ah = NULL;
 
 static void internal_rdma_cleanup();
@@ -110,7 +112,7 @@ static void rdma_init(char *dev_name, int completion_queue_size)
             .max_send_wr  = 1,
             .max_recv_wr  = completion_queue_size,
             .max_send_sge = 1,
-            .max_recv_sge = 1
+            .max_recv_sge = 2
         },
         .qp_type = IBV_QPT_UD,
     };
@@ -169,7 +171,8 @@ void rdma_init_server(char *dev_name, int completion_queue_size)
 
     rdma_init(dev_name, completion_queue_size);
 
-    if (allocate_buf(&buf, &mr, MSG_SIZE + 40)) internal_rdma_cleanup();
+    if (allocate_buf(&buf, &mr, MSG_SIZE)) internal_rdma_cleanup();
+    if (allocate_buf(&header_buf, &header_mr, 40)) rdma_cleanup();
 
     if (ibv_query_gid(context, IB_PORT, 0, &gid)) {
         fprintf(stderr, "Could not get local gid for gid index 0\n");
@@ -199,7 +202,7 @@ rdma_init_client
 {
     rdma_init(dev_name, completion_queue_size);
 
-    if (allocate_buf(&buf, &mr, MSG_SIZE + 40)) internal_rdma_cleanup();
+    if (allocate_buf(&buf, &mr, MSG_SIZE)) internal_rdma_cleanup();
 
     struct ibv_qp_attr attr;
     attr.qp_state = IBV_QPS_RTS;
@@ -240,6 +243,15 @@ void rdma_cleanup()
     }
 
     free(buf);
+
+    if (header_mr) {
+        if (ibv_dereg_mr(header_mr)) {
+            fprintf(stderr, "Couldn't destroy memory region.\n");
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    if (header_buf) free(header_buf);
 
     internal_rdma_cleanup();
 }
@@ -308,16 +320,23 @@ int post_sends(uint32_t qpn, int n)
 
 int post_recvs(int n)
 {
-    struct ibv_sge list = {
-        .addr   = (uintptr_t) buf,
-        .length = MSG_SIZE + 40,
-        .lkey   = mr->lkey
-    };
+    struct ibv_sge list[2];
+
+    list[0].addr = (uintptr_t) header_buf;
+    list[0].length = 40;
+    list[0].lkey = header_mr->lkey;
+
+    list[1].addr = (uintptr_t) buf;
+    list[1].length = MSG_SIZE;
+    list[1].lkey = mr->lkey;
+
     struct ibv_recv_wr wr = {
-        .wr_id      = 0,
-        .sg_list    = &list,
-        .num_sge    = 1,
+        .wr_id = 0,
+        .next = NULL,
+        .sg_list = list,
+        .num_sge = 2
     };
+
     struct ibv_recv_wr *bad_wr;
 
     int i;
