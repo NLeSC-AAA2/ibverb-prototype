@@ -23,7 +23,7 @@ kernel: ibverbs.aocx
 clean:
 	rm -r rdma_client rdma_server udp raw raw_ibverbs *.o ibverbs.*.temp/
 
-rdma.o rdma_server.o rdma_client.o: rdma.h
+rdma.o rdma_server.o rdma_client.o: rdma.h constants.h
 
 rdma_%: rdma_%.o rdma.o
 	gcc -o $@ $^ /lib64/libibverbs.so.1

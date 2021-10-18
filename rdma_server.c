@@ -94,6 +94,7 @@ int main(int argc, char *argv[])
         }
 
         for (int i = 0; i < ne; ++i) {
+            printf("Message size: %d\n", wc[i].byte_len);
             if (wc[i].status != IBV_WC_SUCCESS) {
                 fprintf(stderr, "Failed status %s (%d) for wr_id %d\n",
                         ibv_wc_status_str(wc[i].status),

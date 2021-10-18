@@ -4,5 +4,6 @@
  */
 #ifndef CONSTANTS_H
 #define CONSTANTS_H
-#define MSG_SIZE 1024
+// Maximum payload size with jumbo frames on DAS6 network.
+#define MSG_SIZE 8940
 #endif
