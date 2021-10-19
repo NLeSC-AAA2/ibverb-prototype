@@ -14,7 +14,8 @@
 #define IB_PORT 1
 
 static uint32_t max_mtu;
-static int page_size, send_flags;
+static int page_size;
+static int send_flags = IBV_SEND_SIGNALED;
 
 static struct ibv_context *context;
 static struct ibv_pd      *protection_domain;
@@ -55,7 +56,6 @@ static int allocate_buf(void **buffer, struct ibv_mr **memory_region, size_t siz
 static void rdma_init(char *dev_name, int completion_queue_size)
 {
     page_size = sysconf(_SC_PAGESIZE);
-    send_flags = IBV_SEND_SIGNALED;
 
     int num_devs;
     struct ibv_device *ib_dev = NULL;
