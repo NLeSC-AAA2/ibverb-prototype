@@ -51,6 +51,7 @@ int main(int argc, char *argv[])
     (void) argc;
     (void) argv;
     const int completion_queue_size = 50;
+    struct recv_buffer *buffers;
 
     int result = EXIT_SUCCESS;
 
@@ -68,7 +69,7 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    rdma_init_server(argv[1], completion_queue_size);
+    buffers = rdma_init_server(argv[1], completion_queue_size);
 
     int outstanding = post_recvs(completion_queue_size);
     if (outstanding < completion_queue_size) {
@@ -116,6 +117,7 @@ int main(int argc, char *argv[])
     }
 
   cleanup:
+    free(buffers);
     rdma_cleanup();
 
     return result;

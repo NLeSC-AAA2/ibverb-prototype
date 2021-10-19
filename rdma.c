@@ -10,6 +10,7 @@
 #include <unistd.h>
 
 #include "rdma.h"
+#include "raw_packet.h"
 
 #define IB_PORT 1
 
@@ -22,25 +23,25 @@ static struct ibv_pd      *protection_domain;
 struct ibv_cq             *completion_queue;
 static struct ibv_qp      *queue_pair;
 
-static void *header_buf = NULL;
-static void *buf = NULL;
-static struct ibv_mr *mr = NULL;
-static struct ibv_mr *header_mr = NULL;
+static void *header_buffer = NULL;
+static void *buffer = NULL;
+static struct ibv_mr *memory_region = NULL;
+static struct ibv_mr *header_memory_region = NULL;
 static struct ibv_ah *ah = NULL;
 
 static void internal_rdma_cleanup();
 
-static int allocate_buf(void **buffer, struct ibv_mr **memory_region, size_t size)
+static int allocate_buf(void **buf, struct ibv_mr **mr, size_t size)
 {
-    if (posix_memalign(buffer, page_size, size)) {
-        fprintf(stderr, "Couldn't allocate work buf.\n");
+    if (posix_memalign(buf, page_size, size)) {
+        fprintf(stderr, "Couldn't allocate work buffer.\n");
         return 1;
     }
 
-    memset(*buffer, 0x7b, size);
+    memset(*buf, 0, size);
 
-    *memory_region = ibv_reg_mr(protection_domain, *buffer, size, IBV_ACCESS_LOCAL_WRITE);
-    if (!*memory_region) {
+    *mr = ibv_reg_mr(protection_domain, *buf, size, IBV_ACCESS_LOCAL_WRITE);
+    if (!*mr) {
         fprintf(stderr, "Couldn't register memory region.\n");
         goto clean_buf;
     }
@@ -48,8 +49,8 @@ static int allocate_buf(void **buffer, struct ibv_mr **memory_region, size_t siz
     return 0;
 
   clean_buf:
-    free(*buffer);
-    *buffer = NULL;
+    free(*buf);
+    *buf= NULL;
     return 1;
 }
 
@@ -164,18 +165,41 @@ static void rdma_init(char *dev_name, int completion_queue_size)
     exit(EXIT_FAILURE);
 }
 
-void rdma_init_server(char *dev_name, int completion_queue_size)
+struct recv_buffer *
+rdma_init_server(char *dev_name, int completion_queue_size)
 {
+    struct recv_buffer *result = NULL;
     union ibv_gid gid;
     char gid_string[33];
 
     rdma_init(dev_name, completion_queue_size);
 
-    if (allocate_buf(&buf, &mr, MSG_SIZE)) internal_rdma_cleanup();
-    if (allocate_buf(&header_buf, &header_mr, 40)) rdma_cleanup();
+    if (allocate_buf(&buffer, &memory_region, completion_queue_size * MSG_SIZE)) {
+        internal_rdma_cleanup();
+        exit(EXIT_FAILURE);
+    }
+
+    if (allocate_buf(&header_buffer, &header_memory_region, completion_queue_size * 40)) {
+        rdma_cleanup();
+        exit(EXIT_FAILURE);
+    }
+
+    result = malloc(completion_queue_size * (sizeof *result));
+    if (!result) {
+        rdma_cleanup();
+        exit(EXIT_FAILURE);
+    }
+
+    struct ib_grh *header_buffers = header_buffer;
+    char *data_buffers = buffer;
+    for (int i = 0; i < completion_queue_size; i++) {
+        result[i].header_buffer = &header_buffers[i];
+        result[i].data_buffer = &data_buffers[i * MSG_SIZE];
+    }
 
     if (ibv_query_gid(context, IB_PORT, 0, &gid)) {
         fprintf(stderr, "Could not get local gid for gid index 0\n");
+        free(result);
         rdma_cleanup();
         exit(EXIT_FAILURE);
     }
@@ -183,26 +207,45 @@ void rdma_init_server(char *dev_name, int completion_queue_size)
     struct ibv_port_attr port_attr;
     if (ibv_query_port(context, IB_PORT, &port_attr)) {
         fprintf(stderr, "Couldn't get port info\n");
+        free(result);
         rdma_cleanup();
         exit(EXIT_FAILURE);
     }
 
     if (!inet_ntop(AF_INET6, &gid, gid_string, sizeof gid_string)) {
         fprintf(stderr, "Couldn't get global id\n");
+        free(result);
         rdma_cleanup();
         exit(EXIT_FAILURE);
     }
 
     fprintf(stderr, "LID: %d\nQPN: %d\nGID: %s\n", port_attr.lid, queue_pair->qp_num, gid_string);
+
+    return result;
 }
 
-void
+struct send_buffer*
 rdma_init_client
 (char *dev_name, int completion_queue_size, int lid, union ibv_gid gid)
 {
+    struct send_buffer *result = NULL;
     rdma_init(dev_name, completion_queue_size);
 
-    if (allocate_buf(&buf, &mr, MSG_SIZE)) internal_rdma_cleanup();
+    if (allocate_buf(&buffer, &memory_region, MSG_SIZE)) {
+        internal_rdma_cleanup();
+        exit(EXIT_FAILURE);
+    }
+
+    result = malloc(completion_queue_size * (sizeof *result));
+    if (!result) {
+        rdma_cleanup();
+        exit(EXIT_FAILURE);
+    }
+
+    char *data_buffers = buffer;
+    for (int i = 0; i < completion_queue_size; i++) {
+        result[i].data_buffer = &data_buffers[i * MSG_SIZE];
+    }
 
     struct ibv_qp_attr attr;
     attr.qp_state = IBV_QPS_RTS;
@@ -210,6 +253,7 @@ rdma_init_client
 
     if (ibv_modify_qp(queue_pair, &attr, IBV_QP_STATE|IBV_QP_SQ_PSN)) {
         fprintf(stderr, "Failed to make queue pair ready to send.\n");
+        free(result);
         rdma_cleanup();
         exit(EXIT_FAILURE);
     }
@@ -230,28 +274,31 @@ rdma_init_client
     if (!ah) {
         char *msg = errno != 0 ? strerror(errno) : "";
         fprintf(stderr, "Failed to create AH: %s\n", msg);
+        free(result);
         rdma_cleanup();
         exit(EXIT_FAILURE);
     }
+
+    return result;
 }
 
 void rdma_cleanup()
 {
-    if (ibv_dereg_mr(mr)) {
+    if (ibv_dereg_mr(memory_region)) {
         fprintf(stderr, "Couldn't destroy memory region.\n");
         exit(EXIT_FAILURE);
     }
 
-    free(buf);
+    free(buffer);
 
-    if (header_mr) {
-        if (ibv_dereg_mr(header_mr)) {
+    if (header_memory_region) {
+        if (ibv_dereg_mr(header_memory_region)) {
             fprintf(stderr, "Couldn't destroy memory region.\n");
             exit(EXIT_FAILURE);
         }
     }
 
-    if (header_buf) free(header_buf);
+    if (header_buffer) free(header_buffer);
 
     internal_rdma_cleanup();
 }
@@ -289,9 +336,9 @@ static void internal_rdma_cleanup()
 int post_sends(uint32_t qpn, int n)
 {
     struct ibv_sge list = {
-        .addr   = (uintptr_t) buf,
+        .addr   = (uintptr_t) buffer,
         .length = MSG_SIZE,
-        .lkey   = mr->lkey
+        .lkey   = memory_region->lkey
     };
     struct ibv_send_wr wr = {
         .wr_id      = 0,
@@ -322,13 +369,13 @@ int post_recvs(int n)
 {
     struct ibv_sge list[2];
 
-    list[0].addr = (uintptr_t) header_buf;
+    list[0].addr = (uintptr_t) header_buffer;
     list[0].length = 40;
-    list[0].lkey = header_mr->lkey;
+    list[0].lkey = header_memory_region->lkey;
 
-    list[1].addr = (uintptr_t) buf;
+    list[1].addr = (uintptr_t) buffer;
     list[1].length = MSG_SIZE;
-    list[1].lkey = mr->lkey;
+    list[1].lkey = memory_region->lkey;
 
     struct ibv_recv_wr wr = {
         .wr_id = 0,

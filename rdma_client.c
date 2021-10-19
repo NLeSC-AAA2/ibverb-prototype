@@ -50,6 +50,8 @@ void stop_loop(int sig)
 int main(int argc, char *argv[])
 {
     const int completion_queue_size = 1;
+    struct send_buffer *buffers = NULL;
+
     int send_limit = 0;
     int send_count = 0;
     int qpn;
@@ -77,7 +79,7 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    rdma_init_client(argv[1], completion_queue_size, lid, gid);
+    buffers = rdma_init_client(argv[1], completion_queue_size, lid, gid);
 
     int outstanding = post_sends(qpn, completion_queue_size);
     if (outstanding < completion_queue_size) {
@@ -109,7 +111,7 @@ int main(int argc, char *argv[])
         }
 
         outstanding -= ne;
-        if (outstanding <= completion_queue_size) {
+        if (outstanding < completion_queue_size) {
             outstanding += post_sends(qpn, completion_queue_size - outstanding);
             if (outstanding < completion_queue_size) {
                 fprintf(stderr, "Couldn't post send (%d)\n", outstanding);
@@ -121,6 +123,7 @@ int main(int argc, char *argv[])
     }
 
   cleanup:
+    free(buffers);
     rdma_cleanup();
 
     return result;

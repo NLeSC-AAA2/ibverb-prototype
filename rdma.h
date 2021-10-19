@@ -18,13 +18,22 @@
 
 #include "constants.h"
 
+struct recv_buffer {
+    struct ib_grh *header_buffer;
+    char *data_buffer;
+};
+
+struct send_buffer {
+    char *data_buffer;
+};
+
 extern struct ibv_cq *completion_queue;
 
-void
+struct recv_buffer *
 rdma_init_server
 (char *dev_name, int completion_queue_size);
 
-void
+struct send_buffer *
 rdma_init_client
 (char *dev_name, int completion_queue_size, int lid, union ibv_gid gid);
 
