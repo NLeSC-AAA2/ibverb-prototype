@@ -71,9 +71,8 @@ int main(int argc, char *argv[])
 
     buffers = rdma_init_server(argv[1], completion_queue_size);
 
-    int outstanding = post_recvs(completion_queue_size);
-    if (outstanding < completion_queue_size) {
-        fprintf(stderr, "Couldn't post receive (%d)\n", outstanding);
+    if (post_recvs(0, completion_queue_size)) {
+        fprintf(stderr, "Couldn't post receives\n");
         result = EXIT_FAILURE;
         goto cleanup;
     }
@@ -105,11 +104,9 @@ int main(int argc, char *argv[])
             }
         }
 
-        outstanding -= ne;
-        if (outstanding <= 1) {
-            outstanding += post_recvs(completion_queue_size - outstanding);
-            if (outstanding < completion_queue_size) {
-                fprintf(stderr, "Couldn't post receive (%d)\n", outstanding);
+        if (ne > 0) {
+            if (post_recvs(wc[0].wr_id, ne)) {
+                fprintf(stderr, "Couldn't post receives\n");
                 result = EXIT_FAILURE;
                 goto cleanup;
             }

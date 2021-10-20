@@ -15,7 +15,7 @@
 #define IB_PORT 1
 
 static uint32_t max_mtu;
-static int page_size;
+static int page_size, queue_size;
 static int send_flags = IBV_SEND_SIGNALED;
 
 static struct ibv_context *context;
@@ -25,6 +25,11 @@ static struct ibv_qp      *queue_pair;
 
 static void *header_buffer = NULL;
 static void *buffer = NULL;
+
+static struct ibv_sge *scatter_gather = NULL;
+static struct ibv_recv_wr *recv_requests = NULL;
+static struct ibv_send_wr *send_requests = NULL;
+
 static struct ibv_mr *memory_region = NULL;
 static struct ibv_mr *header_memory_region = NULL;
 static struct ibv_ah *ah = NULL;
@@ -57,6 +62,7 @@ static int allocate_buf(void **buf, struct ibv_mr **mr, size_t size)
 static void rdma_init(char *dev_name, int completion_queue_size)
 {
     page_size = sysconf(_SC_PAGESIZE);
+    queue_size = completion_queue_size;
 
     int num_devs;
     struct ibv_device *ib_dev = NULL;
@@ -110,7 +116,7 @@ static void rdma_init(char *dev_name, int completion_queue_size)
         .send_cq = completion_queue,
         .recv_cq = completion_queue,
         .cap     = {
-            .max_send_wr  = 1,
+            .max_send_wr  = completion_queue_size,
             .max_recv_wr  = completion_queue_size,
             .max_send_sge = 1,
             .max_recv_sge = 2
@@ -190,11 +196,40 @@ rdma_init_server(char *dev_name, int completion_queue_size)
         exit(EXIT_FAILURE);
     }
 
+    scatter_gather = malloc(completion_queue_size * 2 * (sizeof *scatter_gather));
+    if (!scatter_gather) {
+        rdma_cleanup();
+        exit(EXIT_FAILURE);
+    }
+
+    recv_requests = malloc(completion_queue_size * (sizeof *recv_requests));
+    if (!recv_requests) {
+        rdma_cleanup();
+        exit(EXIT_FAILURE);
+    }
+
     struct ib_grh *header_buffers = header_buffer;
     char *data_buffers = buffer;
     for (int i = 0; i < completion_queue_size; i++) {
         result[i].header_buffer = &header_buffers[i];
         result[i].data_buffer = &data_buffers[i * MSG_SIZE];
+
+        scatter_gather[2 * i].addr = (uintptr_t) result[i].header_buffer;
+        scatter_gather[2 * i].length = 40;
+        scatter_gather[2 * i].lkey = header_memory_region->lkey;
+
+        scatter_gather[(2 * i) + 1].addr = (uintptr_t) result[i].data_buffer;
+        scatter_gather[(2 * i) + 1].length = MSG_SIZE;
+        scatter_gather[(2 * i) + 1].lkey = memory_region->lkey;
+
+        recv_requests[i].wr_id = i;
+        if (i == completion_queue_size - 1) {
+            recv_requests[i].next = &recv_requests[0];
+        } else {
+            recv_requests[i].next = &recv_requests[i+1];
+        }
+        recv_requests[i].sg_list = &scatter_gather[2*i];
+        recv_requests[i].num_sge = 2;
     }
 
     if (ibv_query_gid(context, IB_PORT, 0, &gid)) {
@@ -226,12 +261,17 @@ rdma_init_server(char *dev_name, int completion_queue_size)
 
 struct send_buffer*
 rdma_init_client
-(char *dev_name, int completion_queue_size, int lid, union ibv_gid gid)
+( char *dev_name
+, int completion_queue_size
+, int lid
+, union ibv_gid gid
+, uint32_t qpn
+)
 {
     struct send_buffer *result = NULL;
     rdma_init(dev_name, completion_queue_size);
 
-    if (allocate_buf(&buffer, &memory_region, MSG_SIZE)) {
+    if (allocate_buf(&buffer, &memory_region, completion_queue_size * MSG_SIZE)) {
         internal_rdma_cleanup();
         exit(EXIT_FAILURE);
     }
@@ -242,9 +282,16 @@ rdma_init_client
         exit(EXIT_FAILURE);
     }
 
-    char *data_buffers = buffer;
-    for (int i = 0; i < completion_queue_size; i++) {
-        result[i].data_buffer = &data_buffers[i * MSG_SIZE];
+    scatter_gather = malloc(completion_queue_size * (sizeof *scatter_gather));
+    if (!scatter_gather) {
+        rdma_cleanup();
+        exit(EXIT_FAILURE);
+    }
+
+    send_requests = malloc(completion_queue_size * (sizeof *send_requests));
+    if (!send_requests) {
+        rdma_cleanup();
+        exit(EXIT_FAILURE);
     }
 
     struct ibv_qp_attr attr;
@@ -279,6 +326,29 @@ rdma_init_client
         exit(EXIT_FAILURE);
     }
 
+    char *data_buffers = buffer;
+    for (int i = 0; i < completion_queue_size; i++) {
+        result[i].data_buffer = &data_buffers[i * MSG_SIZE];
+
+        scatter_gather[i].addr = (uintptr_t) result[i].data_buffer;
+        scatter_gather[i].length = MSG_SIZE;
+        scatter_gather[i].lkey = memory_region->lkey;
+
+        send_requests[i].wr_id = i;
+        if (i == completion_queue_size - 1) {
+            send_requests[i].next = &send_requests[0];
+        } else {
+            send_requests[i].next = &send_requests[i+1];
+        }
+        send_requests[i].sg_list = &scatter_gather[i];
+        send_requests[i].num_sge = 1;
+        send_requests[i].opcode = IBV_WR_SEND;
+        send_requests[i].send_flags = send_flags;
+        send_requests[i].wr.ud.ah = ah;
+        send_requests[i].wr.ud.remote_qpn = qpn;
+        send_requests[i].wr.ud.remote_qkey = 0x11111111;
+    }
+
     return result;
 }
 
@@ -299,6 +369,10 @@ void rdma_cleanup()
     }
 
     if (header_buffer) free(header_buffer);
+
+    if (scatter_gather) free(scatter_gather);
+    if (recv_requests) free(recv_requests);
+    if (send_requests) free(send_requests);
 
     internal_rdma_cleanup();
 }
@@ -333,68 +407,44 @@ static void internal_rdma_cleanup()
     }
 }
 
-int post_sends(uint32_t qpn, int n)
+int post_sends(int start, int count)
 {
-    struct ibv_sge list = {
-        .addr   = (uintptr_t) buffer,
-        .length = MSG_SIZE,
-        .lkey   = memory_region->lkey
-    };
-    struct ibv_send_wr wr = {
-        .wr_id      = 0,
-        .sg_list    = &list,
-        .num_sge    = 1,
-        .opcode     = IBV_WR_SEND,
-        .send_flags = send_flags,
-        .wr         = {
-                .ud = {
-                    .ah          = ah,
-                    .remote_qpn  = qpn,
-                    .remote_qkey = 0x11111111
-                    }
-        }
-    };
+    int return_value = 0;
     struct ibv_send_wr *bad_wr;
 
-    int i;
-    for (i = 0; i < n; ++i) {
-        if (ibv_post_send(queue_pair, &wr, &bad_wr))
-            break;
+    size_t last_idx = (start + count - 1) % queue_size;
+    void *old = send_requests[last_idx].next;
+
+    send_requests[last_idx].next = NULL;
+
+    int result = ibv_post_send(queue_pair, &send_requests[start], &bad_wr);
+    if (result) {
+        fprintf(stderr, "post send failed (%d) with errno: %d\n%s\n%s\n", result, errno, strerror(result), strerror(errno));
+        return_value = -1;
     }
 
-    return i;
+    send_requests[last_idx].next = old;
+
+    return return_value;
 }
 
-int post_recvs(int n)
+int post_recvs(int start, int count)
 {
-    struct ibv_sge list[2];
-
-    list[0].addr = (uintptr_t) header_buffer;
-    list[0].length = 40;
-    list[0].lkey = header_memory_region->lkey;
-
-    list[1].addr = (uintptr_t) buffer;
-    list[1].length = MSG_SIZE;
-    list[1].lkey = memory_region->lkey;
-
-    struct ibv_recv_wr wr = {
-        .wr_id = 0,
-        .next = NULL,
-        .sg_list = list,
-        .num_sge = 2
-    };
-
+    int return_value = 0;
     struct ibv_recv_wr *bad_wr;
 
-    int i;
-    for (i = 0; i < n; ++i) {
-        int result = ibv_post_recv(queue_pair, &wr, &bad_wr);
-        if (result) {
-            fprintf(stderr, "post receive #%d failed (%d) with errno: %d\n", i, result, errno);
+    size_t last_idx = (start + count - 1) % queue_size;
+    void *old = recv_requests[last_idx].next;
 
-            break;
-        }
+    recv_requests[last_idx].next = NULL;
+
+    int result = ibv_post_recv(queue_pair, &recv_requests[start], &bad_wr);
+    if (result) {
+        fprintf(stderr, "post receive failed (%d) with errno: %d\n", result, errno);
+        return_value = -1;
     }
 
-    return i;
+    recv_requests[last_idx].next = old;
+
+    return return_value;
 }

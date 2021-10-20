@@ -35,14 +35,19 @@ rdma_init_server
 
 struct send_buffer *
 rdma_init_client
-(char *dev_name, int completion_queue_size, int lid, union ibv_gid gid);
+( char *dev_name
+, int completion_queue_size
+, int lid
+, union ibv_gid gid
+, uint32_t qpn
+);
 
 void
 rdma_cleanup();
 
 int
-post_sends(uint32_t qpn, int n);
+post_sends(int start, int count);
 
 int
-post_recvs(int n);
+post_recvs(int start, int count);
 #endif
