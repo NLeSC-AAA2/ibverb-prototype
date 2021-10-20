@@ -96,24 +96,12 @@ int main(int argc, char *argv[])
         for (int i = 0; i < ne; ++i) {
             printf("Message for WR #%ld: index #%d size: %d bytes\n", wc[i].wr_id, buffers[wc[i].wr_id].data_buffer[0], wc[i].byte_len);
 
-            bool correct = true;
-            char *check_buf = buffers[wc[i].wr_id].data_buffer;
-            char val = check_buf[0];
-            for (int j = 1; j < MSG_SIZE; j++) {
-                if (check_buf[j] != val) {
-                    correct = false;
-                    break;
-                }
-            }
-
             if (wc[i].status != IBV_WC_SUCCESS) {
                 fprintf(stderr, "Failed status %s (%d) for wr_id %d\n",
                         ibv_wc_status_str(wc[i].status),
                         wc[i].status, (int) wc[i].wr_id);
                 result = EXIT_FAILURE;
                 goto cleanup;
-            } else if (!correct) {
-                fprintf(stderr, "Found incorrect data in buffer for wr_id %ld\n", wc[i].wr_id);
             }
         }
 
