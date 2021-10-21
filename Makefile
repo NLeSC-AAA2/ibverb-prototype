@@ -8,7 +8,7 @@ CXXFLAGS:=-std=c++11 $(FLAGS)
 udp: udp.o
 	gcc -o $@ $^
 
-raw: raw.o lookup_addr.o
+raw_udp: raw_udp.o lookup_addr.o
 	gcc -o $@ $^
 
 raw_ibverbs: raw_ibverbs.o lookup_addr.o opencl_utils.o raw_packet.o fpga_host.o
@@ -16,12 +16,12 @@ raw_ibverbs: raw_ibverbs.o lookup_addr.o opencl_utils.o raw_packet.o fpga_host.o
 
 rdma: rdma_server rdma_client
 
-all: udp raw raw_ibverbs rdma
+all: udp raw_udp raw_ibverbs rdma
 
 kernel: ibverbs.aocx
 
 clean:
-	rm -rf rdma_client rdma_server udp raw raw_ibverbs *.o ibverbs.*.temp/
+	rm -rf rdma_client rdma_server udp raw_udp raw_ibverbs *.o ibverbs.*.temp/
 
 rdma.o rdma_server.o rdma_client.o: rdma.h constants.h
 
