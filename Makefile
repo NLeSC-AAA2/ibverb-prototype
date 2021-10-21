@@ -21,7 +21,7 @@ all: udp raw raw_ibverbs rdma
 kernel: ibverbs.aocx
 
 clean:
-	rm -r rdma_client rdma_server udp raw raw_ibverbs *.o ibverbs.*.temp/
+	rm -rf rdma_client rdma_server udp raw raw_ibverbs *.o ibverbs.*.temp/
 
 rdma.o rdma_server.o rdma_client.o: rdma.h constants.h
 
