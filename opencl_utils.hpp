@@ -26,6 +26,8 @@ void set_args(cl::Kernel &k, Args &&...args)
     set_args_n<0>(k, std::forward<Args>(args)...);
 }
 
+// Wrapper class for OpenCL kernels, that exposes a simple callable interface
+// to invoke the kernel.
 class Kernel
 {
     cl::Kernel kernel;
@@ -35,6 +37,8 @@ class Kernel
     static cl::Context getContext(const cl::Program& prog);
 
   public:
+    // Produce a wrapper for the kernel with name 'name' include in program
+    // 'prog'
     Kernel(const cl::Program& prog, std::string name);
 
     template<typename... Args>

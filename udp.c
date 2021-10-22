@@ -22,6 +22,7 @@ void stop_loop(int sig)
     packet_loop = 0;
 }
 
+// 65,535 is the (theoretical) max size of the payload in a UDP datagram
 static char udp_buffer[65535];
 
 void

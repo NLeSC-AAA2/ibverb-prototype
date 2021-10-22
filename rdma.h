@@ -18,15 +18,19 @@
 
 #include "constants.h"
 
+// Struct for the allocated receive buffers, separate pointers for the header
+// and payload parts, since we use separate buffers for these.
 struct recv_buffer {
     struct ib_grh *header_buffer;
     char *data_buffer;
 };
 
+// Struct for the allocated send buffers
 struct send_buffer {
     char *data_buffer;
 };
 
+// Pointer to the allocated completion queue
 extern struct ibv_cq *completion_queue;
 
 struct recv_buffer *

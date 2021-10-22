@@ -75,13 +75,16 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
+    // ibverbs initialisation and allocate a circular buffer to write from
     buffers = rdma_init_client(argv[1], completion_queue_size, lid, gid, qpn);
 
+    // initialise the memory in each send buffer
     int count = 0;
     for (int i = 0; i < completion_queue_size; i++) {
         memset(buffers[i].data_buffer, count++, MSG_SIZE);
     }
 
+    // Fill completion queue with Send Requests for each buffer
     if (post_sends(0, completion_queue_size)) {
         fprintf(stderr, "Couldn't post sends\n");
         result = EXIT_FAILURE;
@@ -90,6 +93,7 @@ int main(int argc, char *argv[])
 
     struct ibv_wc wc[10];
     while (client_loop) {
+        // Poll for completed Send Requests
         int ne = ibv_poll_cq(completion_queue, 10, wc);
         if (ne < 0) {
             fprintf(stderr, "poll CQ failed %d\n", ne);
@@ -99,6 +103,7 @@ int main(int argc, char *argv[])
             fprintf(stderr, "sent %d messages\n", ne);
         }
 
+        // Check the result status for each completed Send Request
         for (int i = 0; i < ne; ++i) {
             if (wc[i].status != IBV_WC_SUCCESS) {
                 fprintf(stderr, "Failed status %s (%d) for wr_id %d\n",
@@ -108,9 +113,11 @@ int main(int argc, char *argv[])
                 goto cleanup;
             }
 
+            // Change buffer contents
             memset(buffers[wc[i].wr_id].data_buffer, count++, MSG_SIZE);
         }
 
+        // If there were completed requests, requeue the Send Requests.
         if (ne > 0) {
             if (post_sends(wc[0].wr_id, ne)) {
                 fprintf(stderr, "Couldn't post sends\n");

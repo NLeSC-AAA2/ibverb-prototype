@@ -34,6 +34,10 @@ static char *udp_data = &ether_buffer[sizeof *ether_header + sizeof *ip_header +
 static const size_t header_size = sizeof *ether_header + sizeof *ip_header + sizeof *udp_header;
 static const size_t max_msg_size = IP_MAXPACKET - header_size;
 
+// IPv4 header checksum implementation. Per RFC 791, the IPv4 header checksum
+// is the ones' complement sum of all 16bit words in the header. Since C uses
+// two's complement, we have to manually rejiggle any potential overvlow at the
+// end.
 uint16_t ipv4check(void *raw_data, int n)
 {
     uint16_t *data = (uint16_t*) raw_data;
@@ -87,6 +91,7 @@ int main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
 
+    // Specify the local NIC to send from and the destination MAC
     device.sll_family = AF_PACKET;
     device.sll_halen = 6;
     memcpy(device.sll_addr, remote.mac, ETH_ALEN);
@@ -95,18 +100,21 @@ int main(int argc, char **argv)
     memcpy(ether_header->h_dest, remote.mac, ETH_ALEN);
     memcpy(ether_header->h_source, local.mac, ETH_ALEN);
 
-    ip_header->ihl = 5;
-    ip_header->version = 4;
+    ip_header->ihl = 5; // Header length
+    ip_header->version = 4; // IPv4
     ip_header->tos = 0;
-    ip_header->id = htonl (54321);
-    ip_header->frag_off = 0;
+    ip_header->id = htonl (54321); // Arbitrarily chosen packet id.
+    ip_header->frag_off = 0; // Don't fragment
     ip_header->ttl = 255;
     ip_header->protocol = IPPROTO_UDP;
     ip_header->daddr = remote.ipv4;
     ip_header->saddr = local.ipv4;
 
+    // Use the commandline destination port
     udp_header->dest = htons(atoi(argv[1]));
+    // Specify 4242 as source port
     udp_header->source = htons(4242);
+    // UDP checksum is optional, so we skip it
     udp_header->check = 0;
 
     int sock = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));

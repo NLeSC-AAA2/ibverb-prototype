@@ -3,7 +3,7 @@ syntax: rootglob
 rdma_server
 rdma_client
 udp
-raw
+raw_udp
 raw_ibverbs
 ibverbs/
 ibverbs.*.temp/

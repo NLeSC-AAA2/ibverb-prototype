@@ -69,8 +69,10 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
+    // ibverbs initialisation and allocate circular buffer to read from
     buffers = rdma_init_server(argv[1], completion_queue_size);
 
+    // Fill completion queue with Receive Requests for each buffer
     if (post_recvs(0, completion_queue_size)) {
         fprintf(stderr, "Couldn't post receives\n");
         result = EXIT_FAILURE;
@@ -79,12 +81,15 @@ int main(int argc, char *argv[])
 
     struct ibv_wc wc[10];
     while (server_loop) {
+        // Poll for completed Receive Requests
         int ne = ibv_poll_cq(completion_queue, 10, wc);
         if (ne < 0) {
             fprintf(stderr, "poll CQ failed %d\n", ne);
             result = EXIT_FAILURE;
             goto cleanup;
         } else if (ne == 0) {
+            // If no requests are completed, sleep for 1 second to avoid
+            // pinning the CPU at 100% utilisation
             struct timespec sleep_time;
             sleep_time.tv_sec = 1;
             sleep_time.tv_nsec = 0;
@@ -93,6 +98,7 @@ int main(int argc, char *argv[])
             fprintf(stderr, "received %d messages\n", ne);
         }
 
+        // Check the result status for each completed Receive Request
         for (int i = 0; i < ne; ++i) {
             printf("Message for WR #%ld: index #%d size: %d bytes\n", wc[i].wr_id, buffers[wc[i].wr_id].data_buffer[0], wc[i].byte_len);
 
@@ -105,6 +111,7 @@ int main(int argc, char *argv[])
             }
         }
 
+        // If there were completed requests, requeue the Receive Requests.
         if (ne > 0) {
             if (post_recvs(wc[0].wr_id, ne)) {
                 fprintf(stderr, "Couldn't post receives\n");

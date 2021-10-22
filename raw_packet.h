@@ -11,7 +11,11 @@
 extern "C" {
 #endif
 
+// Struct representing the InfiniBand Global Routing Header. The traffic_class
+// field is split into two parts, as the bit indexing of wire protocols does
+// not line up with the bit indexing in C.
 struct __attribute__((__packed__)) ib_grh {
+    // For our prototype the traffic class and flow label are always 0
 #if __BYTE_ORDER == __LITTLE_ENDIAN
     uint32_t traffic_class_p1: 4;
     uint32_t ip_version: 4;
@@ -30,6 +34,7 @@ struct __attribute__((__packed__)) ib_grh {
     uint8_t dest[16];
 };
 
+// Struct representing the InfiniBand Base Transport Header.
 struct __attribute__((__packed__)) ib_bth {
     uint8_t opcode;
 
@@ -60,10 +65,13 @@ struct __attribute__((__packed__)) ib_bth {
 #endif
 };
 
+// Struct representing the InfiniBand Datagram Extended Transport Header
 struct __attribute__((__packed__)) ib_deth {
+    // The receiving queue this datagram addresses
     uint32_t queue_key;
 
     uint32_t reserved: 8;
+    // The source queue pair
     uint32_t source_qp: 24;
 };
 

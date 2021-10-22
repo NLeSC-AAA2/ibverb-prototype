@@ -36,6 +36,7 @@ static struct ibv_ah *ah = NULL;
 
 static void internal_rdma_cleanup();
 
+// Allocate a page-alligned buffer and corresponding ibverbs memory region
 static int allocate_buf(void **buf, struct ibv_mr **mr, size_t size)
 {
     if (posix_memalign(buf, page_size, size)) {
@@ -59,6 +60,16 @@ static int allocate_buf(void **buf, struct ibv_mr **mr, size_t size)
     return 1;
 }
 
+// Common ibverbs initialisation shared by the client and server:
+//
+//   - Check for and open the specified IB device
+//   - Create an ibverbs context for the device
+//   - Find the IB_PORT to use
+//   - Create a protection domain
+//   - Create a completion queue
+//   - Create Unreliable Datagram queue pair for the completion queue
+//   - Configure the queue pair to use the found IB_PORT and transition it to
+//     the RTR (Ready-to-Receive) state
 static void rdma_init(char *dev_name, int completion_queue_size)
 {
     page_size = sysconf(_SC_PAGESIZE);
@@ -171,6 +182,26 @@ static void rdma_init(char *dev_name, int completion_queue_size)
     exit(EXIT_FAILURE);
 }
 
+// Server specific ibverbs initialisation. The result value is an array of
+// "struct recv_buffer", we allocate one entry per (potential) completion queue
+// element. These struct hold offsets into the header and data buffers used to
+// receive ibverbs datagrams, splitting these buffers into 1 entry per incoming
+// ibverbs datagram.
+//
+// Initialisation steps:
+//   - Call the shared ibverbs initialisation
+//   - Allocate a data buffer big enough to store the payload for a number of
+//     messages equal to the completion queue size
+//   - Allocate a header buffer big enough to store the header information for
+//     a number of messages equal to the completion queue size
+//   - Allocate a recv_buffer array, contains offsets into data and header
+//     buffers to easily index the data "per datagram"
+//   - Allocate an array for the sge (scatter-gather) configurations for each
+//     of the recv_buffer entries
+//   - Allocate an array of Receive Requests for each of the recv_buffer
+//     entries
+//   - Finally query and report the Local ID, queue pair number, and global ID
+//     on stderr
 struct recv_buffer *
 rdma_init_server(char *dev_name, int completion_queue_size)
 {
@@ -259,6 +290,25 @@ rdma_init_server(char *dev_name, int completion_queue_size)
     return result;
 }
 
+// Client specific ibverbs initialisation. The result value is an array of
+// "struct send_buffer", we allocate one entry per (potential) completion queue
+// element. These struct hold offsets into the data buffer used to
+// receive ibverbs datagrams, splitting it into 1 entry per outgoing ibverbs
+// datagram.
+//
+// Initialisation steps:
+//   - Call the shared ibverbs initialisation
+//   - Allocate a data buffer big enough to store the payload for a number of
+//     messages equal to the completion queue size
+//   - Allocate a send_buffer array, contains an offsets into data buffer to
+//     easily index the data "per datagram"
+//   - Allocate an array for the sge (scatter-gather) configurations for each
+//     of the send_buffer entries
+//   - Allocate an array of Send Requests for each of the send_buffer entries
+//   - Transition the queue pair from RTR (Ready-to-Receive) to RTS
+//     (Ready-to-Send)
+//   - Create an Address Handle to address for the server using its local ID,
+//     global ID, and queue pair number
 struct send_buffer*
 rdma_init_client
 ( char *dev_name
@@ -352,6 +402,7 @@ rdma_init_client
     return result;
 }
 
+// Cleanup all the global allocations done during the initialisation
 void rdma_cleanup()
 {
     if (ibv_dereg_mr(memory_region)) {
@@ -377,6 +428,8 @@ void rdma_cleanup()
     internal_rdma_cleanup();
 }
 
+// Cleanup that's shared between rdma_cleanup() and the error handling in this
+// file.
 static void internal_rdma_cleanup()
 {
     if (ah) {
@@ -407,6 +460,9 @@ static void internal_rdma_cleanup()
     }
 }
 
+// Treat the allocated data buffer and Send Requests as a circular buffer from
+// which we post requests to the the NIC. Starting from request at index
+// 'start' and posting the next 'count' requests.
 int post_sends(int start, int count)
 {
     int return_value = 0;
@@ -428,6 +484,9 @@ int post_sends(int start, int count)
     return return_value;
 }
 
+// Treat the allocated data buffer and Receive Requests as a circular buffer
+// from which we post requests to the the NIC. Starting from request at index
+// 'start' and posting the next 'count' requests.
 int post_recvs(int start, int count)
 {
     int return_value = 0;
