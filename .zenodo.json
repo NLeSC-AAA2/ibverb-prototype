@@ -1,0 +1,13 @@
+{
+  "creators": [
+    {
+      "affiliation": "Netherlands eScience Center",
+      "name": "Verstraaten, Merijn",
+      "orcid": "0000-0002-2717-9851"
+    }
+  ],
+  "license": {
+    "id": "Apache-2.0"
+  },
+  "title": "ibverb-prototype"
+}

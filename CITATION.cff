@@ -1,0 +1,16 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: ibverb-prototype
+message: >-
+  If you use this software, please cite it using this
+  metadata.
+type: software
+authors:
+  - given-names: Merijn
+    family-names: Verstraaten
+    email: m.verstraaten@esciencecenter.nl
+    affiliation: Netherlands eScience Center
+    orcid: 'https://orcid.org/0000-0002-2717-9851'
+license: Apache-2.0
